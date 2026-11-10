@@ -1,4 +1,5 @@
 import type { CatalogItem, CommercialRules } from '../lib/quote'
+import type { StageId } from './constants'
 
 /**
  * Catálogo inicial. `basePrice` é o preço oficial e permanece null até a
@@ -137,7 +138,6 @@ export const funnelStages = [
   { id: 'fechado', label: 'Fechado' },
   { id: 'perdido', label: 'Perdido' },
 ] as const
-export type StageId = (typeof funnelStages)[number]['id']
 
 export const lossReasons = [
   'Preço',
