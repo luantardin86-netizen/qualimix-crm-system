@@ -295,6 +295,20 @@ function hasEmptyValues(values: string[]): boolean {
 }
 
 export function validateSettings(value: AppSettings): AppSettings {
+  const rawSettings = value as unknown as Record<string, unknown>
+  const rawSupportLists = ['leadSources', 'regions', 'lossReasons', 'clientTypes', 'elementTypes']
+  for (const key of rawSupportLists) {
+    const rawList = rawSettings[key]
+    if (Array.isArray(rawList) && rawList.some((item) => typeof item !== 'string' || !item.trim())) {
+      throw new Error('As listas de apoio não podem conter itens vazios.')
+    }
+  }
+  const rawStages = rawSettings.funnelStages
+  if (Array.isArray(rawStages) && rawStages.some((stage) =>
+    !isRecord(stage) || typeof stage.label !== 'string' || !stage.label.trim()
+  )) {
+    throw new Error('Todas as etapas do funil precisam ter um rótulo preenchido.')
+  }
   const next = normalizeSettings(value)
   if (!next.company.tradeName.trim()) throw new Error('Informe o nome comercial da empresa.')
   if (next.catalog.some((item) => !item.id.trim() || !item.code.trim() || !item.name.trim())) throw new Error('Cada produto precisa ter código e nome.')
