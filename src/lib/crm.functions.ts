@@ -39,7 +39,7 @@ const mapSite = (r: any): Site => ({
   id: String(r.id), clientId: String(r.cliente_id), name: r.nome, address: r.endereco ?? '',
   city: r.cidade ?? '', region: r.regiao ?? '', contactName: r.contato_nome ?? '',
   contactPhone: r.contato_telefone ?? '', serviceType: r.tipo_servico ?? '',
-  accessNotes: r.observacoes_acesso ?? '', restrictions: r.restricoes ?? '', demo: Boolean(r.is_demo),
+  accessNotes: r.observacoes_acesso ?? '', restrictions: r.restricoes ?? '', active: Boolean(r.ativa), demo: Boolean(r.is_demo),
 })
 const mapOpportunity = (r: any): Opportunity => ({
   id: String(r.id), title: r.titulo, clientId: String(r.cliente_id), siteId: r.obra_id ?? null,
@@ -115,7 +115,7 @@ export const loadCrmData = createServerFn({ method: 'GET' }).handler(async (): P
   }>(`
     SELECT
       COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.created_at DESC, x.id DESC) FROM (SELECT * FROM public.clientes WHERE is_demo = false) x), '[]'::json) AS clients,
-      COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.created_at DESC, x.id DESC) FROM (SELECT * FROM public.obras WHERE is_demo = false AND ativa = true) x), '[]'::json) AS sites,
+      COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.created_at DESC, x.id DESC) FROM (SELECT * FROM public.obras WHERE is_demo = false) x), '[]'::json) AS sites,
       COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.created_at DESC, x.id DESC) FROM (SELECT * FROM public.oportunidades WHERE is_demo = false) x), '[]'::json) AS opportunities,
       COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.created_at DESC, x.id DESC) FROM (SELECT * FROM public.orcamentos WHERE is_demo = false) x), '[]'::json) AS quotes,
       COALESCE((SELECT json_agg(to_jsonb(x) ORDER BY x.categoria, x.nome) FROM (SELECT * FROM public.produtos WHERE ativo = true) x), '[]'::json) AS products,
