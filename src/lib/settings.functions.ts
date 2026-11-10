@@ -307,19 +307,19 @@ async function assertRemovedSupportValuesUnused(nextSettings: AppSettings): Prom
   ))
   if (removedElementTypes.length) checks.push(pool.query<{ source: string; value: string }>(
     `SELECT 'orçamentos'::text AS source, used.value FROM (
-       SELECT element->>'elementType' AS value
+       SELECT volume_element->>'elementType' AS value
        FROM public.orcamentos q
        CROSS JOIN LATERAL jsonb_array_elements(
          CASE WHEN jsonb_typeof(q.dados_orcamento->'volumeElements') = 'array'
            THEN q.dados_orcamento->'volumeElements' ELSE '[]'::jsonb END
        ) AS element
        UNION ALL
-       SELECT element->>'elementType' AS value
+       SELECT volume_element->>'elementType' AS value
        FROM public.orcamentos q
        CROSS JOIN LATERAL jsonb_array_elements(
          CASE WHEN jsonb_typeof(q.dados_orcamento->'areaElements') = 'array'
            THEN q.dados_orcamento->'areaElements' ELSE '[]'::jsonb END
-       ) AS element
+       ) AS area_items(area_element)
      ) AS used WHERE used.value = ANY($1::text[]) LIMIT 1`,
     [removedElementTypes],
   ))
