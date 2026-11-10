@@ -29,7 +29,7 @@ import {
 import { addDays, brl, brlCents, dateBR, daysBetween, num, parseDecimal, timeBR } from '../lib/format'
 import { formatPhone } from '../lib/documents'
 import { useStore } from '../data/store'
-import { categoryLabel } from '../data/settings'
+import { categoryLabel } from '../data/labels'
 import { type QuoteRecord, type QuoteType } from '../data/fixtures'
 import { todayInSaoPaulo } from '../lib/clock'
 import { displayUserName, localUserId } from '../data/session'
