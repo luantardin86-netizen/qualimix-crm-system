@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { LockKeyhole, LogIn } from 'lucide-react'
 import { login } from '../lib/auth.functions'
+import { getPublicBranding } from '../lib/settings.functions'
 
 export const Route = createFileRoute('/login')({
   head: () => ({ meta: [{ title: 'Entrar — Qualimix CRM' }] }),
@@ -9,10 +10,15 @@ export const Route = createFileRoute('/login')({
 })
 
 function LoginPage() {
+  const [branding, setBranding] = useState<{ tradeName: string; logoUrl: string | null }>({ tradeName: 'Qualimix', logoUrl: null })
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    void getPublicBranding().then(setBranding).catch(() => undefined)
+  }, [])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -32,8 +38,8 @@ function LoginPage() {
     <main className="grid min-h-screen place-items-center bg-surface-2 px-4 py-10">
       <form onSubmit={submit} className="w-full max-w-md rounded-xl border border-line bg-surface p-8 shadow-xl">
         <div className="mb-8">
-          <div className="mb-4 grid h-12 w-12 place-items-center rounded-lg bg-ink text-white"><LockKeyhole className="h-6 w-6" /></div>
-          <p className="text-xs font-bold uppercase tracking-[.2em] text-brand">Qualimix</p>
+          <div className="mb-4 grid h-12 w-12 place-items-center overflow-hidden rounded-lg bg-ink text-white">{branding.logoUrl ? <img src={branding.logoUrl} alt={branding.tradeName} className="h-full w-full object-contain" /> : <LockKeyhole className="h-6 w-6" />}</div>
+          <p className="text-xs font-bold uppercase tracking-[.2em] text-brand">{branding.tradeName}</p>
           <h1 className="mt-1 font-display text-4xl font-extrabold uppercase">Acessar o CRM</h1>
           <p className="mt-2 text-sm text-muted">Entre com seu nome de usuário e senha.</p>
         </div>
