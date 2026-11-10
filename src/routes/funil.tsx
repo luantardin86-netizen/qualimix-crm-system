@@ -49,7 +49,7 @@ function Funil() {
 
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name ?? '—'
   const ownerName = (id: string) => team.find((member) => member.id === id)?.name ?? '—'
-  const leadSites = sites.filter((site) => site.clientId === leadClientId)
+  const leadSites = sites.filter((site) => site.clientId === leadClientId && site.active !== false)
   const leadErrors = leadTried ? validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue }) : {}
 
   const filtered = useMemo(
