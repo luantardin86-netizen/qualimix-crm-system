@@ -7,22 +7,28 @@ import { useStore } from '../data/store'
 import { ProposalDocument, type ProposalData } from './ProposalDocument'
 import { Badge, Button, Field, Modal, inputCls } from './ui'
 
-export function defaultWhatsAppMessage(d: ProposalData) {
+export function defaultWhatsAppMessage(
+  d: ProposalData,
+  company?: { tradeName: string; phone: string | null },
+) {
   const first = d.client?.name.split(' ')[0] ?? ''
   const total = d.result.totalCents === null ? '[valor pendente]' : brlCents(d.result.totalCents)
-  return `Olá, ${first}! Tudo bem? Segue o orçamento ${d.number} referente à obra ${d.site?.name ?? ''}. O valor total é ${total}, com validade até ${d.validUntil ? dateBR(d.validUntil) : '[data]'}. Qualquer dúvida, fico à disposição.`
+  const message = `Olá, ${first}! Tudo bem? Segue o orçamento ${d.number} referente à obra ${d.site?.name ?? ''}. O valor total é ${total}, com validade até ${d.validUntil ? dateBR(d.validUntil) : '[data]'}. Qualquer dúvida, fico à disposição.`
+  const signature = [company?.tradeName.trim(), company?.phone?.trim() ? formatPhone(company.phone) : '']
+    .filter((value): value is string => Boolean(value))
+  return [message, signature.length ? signature.join('\n') : ''].filter(Boolean).join('\n\n')
 }
 
 export function WhatsAppDialog({ open, onClose, data }: { open: boolean; onClose: () => void; data: ProposalData }) {
-  const { toast } = useStore()
+  const { toast, settings } = useStore()
   const [phone, setPhone] = useState('')
   const [msg, setMsg] = useState('')
   useEffect(() => {
     if (open) {
       setPhone(data.client?.whatsapp || data.client?.phone || '')
-      setMsg(defaultWhatsAppMessage(data))
+      setMsg(defaultWhatsAppMessage(data, settings.company))
     }
-  }, [open]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open, data, settings.company])
 
   const url = whatsappUrl(phone, msg)
   const phoneErr = phone && !toWhatsAppNumber(phone) ? 'Telefone inválido. Use DDD + número.' : null
