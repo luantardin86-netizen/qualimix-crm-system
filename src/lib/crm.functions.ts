@@ -413,6 +413,14 @@ export const createOpportunity = createServerFn({ method: 'POST' })
   .validator((input: unknown): OpportunityCreateInput => {
     if (!input || typeof input !== 'object') throw new Error('Dados da oportunidade inválidos.')
     const data = input as Record<string, unknown>
+    const shapeErrors = validateLeadFields({
+      title: data.title,
+      clientId: data.clientId,
+      siteId: data.siteId,
+      source: data.source,
+      estimatedValue: data.estimatedValue == null ? '' : String(data.estimatedValue),
+    })
+    if (Object.keys(shapeErrors).length) throw new Error(Object.values(shapeErrors).join(' '))
     const estimatedValue = data.estimatedValue == null || data.estimatedValue === ''
       ? null
       : parseOptionalAmount(String(data.estimatedValue))
