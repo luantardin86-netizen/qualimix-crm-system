@@ -145,7 +145,7 @@ export function QuoteBuilder({ origin, opportunityId, editQuoteId }: { origin?: 
   useEffect(() => {
     if (!workspaceReady || !settingsReady || loaded || savedQuoteId) return
     const editable = editQuoteId ? quotes.find((quote) => quote.id === editQuoteId && !quote.demo && quote.status === 'Rascunho') : undefined
-    const linked = opportunityId ? opportunities.find((o) => o.id === opportunityId) : undefined
+    const linked = opportunityId ? opportunities.find((o) => o.id === opportunityId && !o.archived) : undefined
     const src = origin ? quotes.find((q) => q.id === origin) : undefined
     if (editable) {
       setDraft(fromRecord(editable, ctx.rules.validityDays, false))
