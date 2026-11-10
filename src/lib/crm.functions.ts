@@ -768,6 +768,7 @@ export const persistQuote = createServerFn({ method: 'POST' })
              WHERE id = $1 AND cliente_id = $2
                AND (obra_id IS NULL OR obra_id = $3)
                AND is_demo = false
+               AND arquivada = false
              LIMIT 1`,
             [data.opportunityId, data.clientId, data.siteId],
           )
