@@ -247,15 +247,19 @@ export function SegTabs<T extends string>({ value, onChange, options, label }: {
 export function LogoSlot({ compact, onDark }: { compact?: boolean; onDark?: boolean }) {
   const { settings } = useStore()
   const logoUrl = settings.company.logoUrl
-  const tradeName = settings.company.tradeName || 'Qualimix'
+  const tradeName = settings.company.tradeName.trim()
   return (
     <div className="flex items-center gap-3">
-      {logoUrl ? <img src={logoUrl} alt={tradeName} className="max-h-11 max-w-36 object-contain" /> : <div className="leading-none">
-        <div className={cx('font-display text-2xl font-extrabold uppercase tracking-wide', onDark ? 'text-white' : 'text-ink')}>
-          {tradeName.toLocaleLowerCase('pt-BR') === 'qualimix' ? <><span className="text-brand">Quali</span><span>mix</span></> : tradeName}
-        </div>
-        {!compact && <div className={cx('mt-1 text-[10px] font-semibold uppercase tracking-[0.2em]', onDark ? 'text-white/50' : 'text-muted')}>CRM & Gestão</div>}
-      </div>}
+      {logoUrl
+        ? <img src={logoUrl} alt={tradeName || 'Logo institucional'} className="max-h-11 max-w-36 object-contain" />
+        : <div className="leading-none">
+            {tradeName && (
+              <div className={cx('font-display text-2xl font-extrabold uppercase tracking-wide', onDark ? 'text-white' : 'text-ink')}>
+                {tradeName.toLocaleLowerCase('pt-BR') === 'qualimix' ? <><span className="text-brand">Quali</span><span>mix</span></> : tradeName}
+              </div>
+            )}
+            {!compact && <div className={cx('mt-1 text-[10px] font-semibold uppercase tracking-[0.2em]', onDark ? 'text-white/50' : 'text-muted')}>CRM & Gestão</div>}
+          </div>}
     </div>
   )
 }
