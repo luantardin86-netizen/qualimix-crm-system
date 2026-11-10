@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { Building2, Pencil, Plus, RotateCcw, Archive, Search } from 'lucide-react'
 import { useStore } from '../data/store'
@@ -42,8 +42,8 @@ function Obras() {
   const [formOpen, setFormOpen] = useState(false)
   const [busy, setBusy] = useState(false)
 
-  const refresh = async () => setRows(await loadManagedSites() as ManagedSite[])
-  useEffect(() => { void refresh().catch((error) => toast({ tone: 'erro', title: 'Falha ao carregar obras', body: error instanceof Error ? error.message : 'Verifique a conexão.' })) }, [])
+  const refresh = useCallback(async () => setRows(await loadManagedSites() as ManagedSite[]), [])
+  useEffect(() => { void refresh().catch((error) => toast({ tone: 'erro', title: 'Falha ao carregar obras', body: error instanceof Error ? error.message : 'Verifique a conexão.' })) }, [refresh, toast])
 
   const visible = useMemo(() => {
     const term = search.trim().toLocaleLowerCase('pt-BR')
