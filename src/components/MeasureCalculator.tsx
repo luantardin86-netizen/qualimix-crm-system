@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { computeElement, type MeasureElement, type MeasureKind, type MeasureSummary } from '../lib/quote'
 import { num, parseDecimal } from '../lib/format'
-import { elementTypes as defaultElementTypes } from '../data/settings'
+import { useStore } from '../data/store'
 import { Button, cx, inputCls } from './ui'
 
 export const newId = () =>
@@ -87,7 +87,7 @@ export function MeasureCalculator({
   summary,
   onChange,
   onMargin,
-  elementTypes = defaultElementTypes,
+  elementTypes,
 }: {
   kind: MeasureKind
   elements: MeasureElement[]
@@ -97,6 +97,8 @@ export function MeasureCalculator({
   onMargin: (v: string) => void
   elementTypes?: string[]
 }) {
+  const { settings } = useStore()
+  const availableElementTypes = elementTypes ?? settings.elementTypes
   const unit = kind === 'volume' ? 'm³' : 'm²'
   const results = useMemo(() => elements.map((element) => computeElement(element, kind)), [elements, kind])
   const patch = (id: string, value: Partial<MeasureElement>) =>
@@ -114,7 +116,7 @@ export function MeasureCalculator({
           const isStair = type === 'escada'
           const isPillar = type === 'pilar'
           const factorListId = 'stair-factor-' + element.id.replace(/[^a-zA-Z0-9_-]/g, '')
-          const typeOptions = optionsFor(kind, element.elementType, elementTypes)
+          const typeOptions = optionsFor(kind, element.elementType, availableElementTypes)
 
           return (
             <div
