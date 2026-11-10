@@ -88,8 +88,13 @@ function CompanySettingsEditor({
   const [draft, setDraft] = useState<CompanyDraft>(() => toCompanyDraft(company))
   const [savedDraft, setSavedDraft] = useState<CompanyDraft>(() => toCompanyDraft(company))
   const [saving, setSaving] = useState(false)
+  const [logoUploading, setLogoUploading] = useState(false)
+  const [logoLocalPreview, setLogoLocalPreview] = useState<string | null>(null)
   const [logoPreviewFailed, setLogoPreviewFailed] = useState(false)
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft)
+  const logoPreviewSrc = logoLocalPreview ?? (
+    draft.logoUrl.trim() && !logoPreviewFailed ? draft.logoUrl.trim() : null
+  )
 
   useEffect(() => {
     if (!dirty) {
@@ -100,8 +105,13 @@ function CompanySettingsEditor({
   }, [company, dirty])
 
   useEffect(() => {
-    onDirtyChange(dirty)
-  }, [dirty, onDirtyChange])
+    onDirtyChange(dirty || logoUploading)
+  }, [dirty, logoUploading, onDirtyChange])
+
+  useEffect(() => {
+    if (!logoLocalPreview) return
+    return () => URL.revokeObjectURL(logoLocalPreview)
+  }, [logoLocalPreview])
 
   const cnpjDigits = onlyDigits(draft.cnpj)
   const errors = {
@@ -123,12 +133,56 @@ function CompanySettingsEditor({
 
   const discard = () => {
     setDraft(savedDraft)
+    setLogoLocalPreview(null)
     setLogoPreviewFailed(false)
+  }
+
+  const uploadLogo = async (file: File) => {
+    const maxBytes = 2 * 1024 * 1024
+    const acceptedTypes = ['image/png', 'image/jpeg', 'image/webp']
+    if (!acceptedTypes.includes(file.type)) {
+      onToast('Formato de imagem inválido', 'Envie uma imagem PNG, JPG ou WebP.')
+      return
+    }
+    if (file.size === 0 || file.size > maxBytes) {
+      onToast('Tamanho de imagem inválido', 'A logo precisa ter no máximo 2 MB.')
+      return
+    }
+
+    setLogoLocalPreview(URL.createObjectURL(file))
+    setLogoPreviewFailed(false)
+    setLogoUploading(true)
+    try {
+      const formData = new FormData()
+      formData.set('file', file)
+      const response = await fetch('/api/logo-upload', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { Accept: 'application/json' },
+        body: formData,
+      })
+      const payload = await response.json().catch(() => null) as { logoUrl?: unknown; error?: unknown } | null
+      if (!response.ok) {
+        throw new Error(typeof payload?.error === 'string' ? payload.error : 'O servidor não conseguiu enviar a imagem.')
+      }
+      if (typeof payload?.logoUrl !== 'string' || !isHttpsUrl(payload.logoUrl)) {
+        throw new Error('O servidor retornou um endereço de imagem inválido.')
+      }
+      update('logoUrl', payload.logoUrl)
+      setLogoLocalPreview(null)
+      setLogoPreviewFailed(false)
+      onToast('Logo enviada', 'A prévia foi atualizada. Salve os dados institucionais para aplicar a alteração.')
+    } catch (error) {
+      setLogoLocalPreview(null)
+      onToast('Não foi possível enviar a logo', error instanceof Error ? error.message : 'Ocorreu um erro no upload.')
+    } finally {
+      setLogoUploading(false)
+    }
   }
 
   const save = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    if (hasErrors || !dirty) return
+    if (hasErrors || !dirty || logoUploading) return
     setSaving(true)
     try {
       await onSave({
@@ -207,10 +261,44 @@ function CompanySettingsEditor({
             update('logoUrl', value)
           },
         })}
-        <div className="flex min-h-20 items-center gap-3 rounded-md border border-dashed border-line p-3">
-          {logoUrlIsPreviewable
-            ? <img src={draft.logoUrl.trim()} alt="Prévia da logo institucional" onError={() => setLogoPreviewFailed(true)} className="max-h-16 max-w-40 object-contain" />
-            : <span className="text-xs text-muted">{draft.logoUrl.trim() ? 'Prévia indisponível para esta URL.' : 'A prévia da logo aparecerá aqui.'}</span>}
+        <div className="space-y-3 sm:col-span-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <label className={cx(
+              'inline-flex min-h-10 cursor-pointer items-center rounded-md border border-line bg-surface px-3 text-sm font-semibold text-ink hover:bg-surface-2',
+              (saving || logoUploading) && 'pointer-events-none opacity-60',
+            )}>
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                disabled={saving || logoUploading}
+                onChange={(event) => {
+                  const file = event.currentTarget.files?.[0]
+                  event.currentTarget.value = ''
+                  if (file) void uploadLogo(file)
+                }}
+              />
+              <span>{logoUploading ? 'Enviando logo…' : 'Enviar imagem'}</span>
+            </label>
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={saving || logoUploading || !draft.logoUrl}
+              onClick={() => {
+                update('logoUrl', '')
+                setLogoLocalPreview(null)
+                setLogoPreviewFailed(false)
+              }}
+            >
+              Remover logo
+            </Button>
+            <span className="text-xs text-muted">PNG, JPG ou WebP. Tamanho máximo: 2 MB.</span>
+          </div>
+          <div className="flex min-h-24 items-center gap-3 rounded-md border border-dashed border-line p-3">
+            {logoPreviewSrc
+              ? <img src={logoPreviewSrc} alt="Prévia da logo institucional" onError={() => setLogoPreviewFailed(true)} className="max-h-20 max-w-48 object-contain" />
+              : <span className="text-xs text-muted">{draft.logoUrl.trim() ? 'Prévia indisponível para esta URL.' : 'Nenhuma logo selecionada.'}</span>}
+          </div>
         </div>
       </div>
       <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-line pt-4">
@@ -219,8 +307,8 @@ function CompanySettingsEditor({
           {dirty && <span className="ml-2">Campos vazios serão salvos como null.</span>}
         </div>
         <div className="flex gap-2">
-          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>Descartar</Button>
-          <Button type="submit" variant="primary" disabled={!dirty || hasErrors || saving}>
+          <Button type="button" variant="secondary" disabled={!dirty || saving || logoUploading} onClick={discard}>Descartar</Button>
+          <Button type="submit" variant="primary" disabled={!dirty || hasErrors || saving || logoUploading}>
             {saving ? 'Salvando…' : 'Salvar dados institucionais'}
           </Button>
         </div>
