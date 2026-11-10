@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultSettings, normalizeSettings, validateSettings } from './settings'
+import { createDefaultSettings } from './settings'
+import { normalizeSettings, validateSettings } from './settings-validation'
 import { pendingSettings } from '../lib/settings-summary'
 
 describe('app settings', () => {
