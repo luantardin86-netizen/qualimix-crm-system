@@ -18,17 +18,6 @@ export const catalog: CatalogItem[] = [
   { id: 'm-fibra', code: 'MAT-FIB', name: 'Adição de fibra', category: 'material', unit: 'm³', description: 'Adição de fibra ao concreto', basePrice: null, demoPrice: 38, active: true, validFrom: null },
 ]
 
-export const categoryLabel: Record<CatalogItem['category'], string> = {
-  concreto: 'Concreto',
-  piso: 'Piso',
-  bombeamento: 'Bombeamento',
-  frete: 'Frete',
-  estadia: 'Estadia',
-  servico: 'Serviço',
-  material: 'Material',
-  equipamento: 'Equipamento',
-}
-
 /** Regras oficiais: nada confirmado ainda pela Qualimix → tudo pendente. */
 export const officialRules: CommercialRules = {
   freight: {
@@ -159,22 +148,6 @@ export const lossReasons = [
   'Fora da região atendida',
   'Outro',
 ]
-
-export const quoteStatuses = [
-  'Rascunho',
-  'Aguardando informações',
-  'Aguardando aprovação',
-  'Aprovado internamente',
-  'Enviado ao cliente',
-  'Em negociação',
-  'Aceito',
-  'Recusado',
-  'Expirado',
-  'Cancelado',
-] as const
-export type QuoteStatus = (typeof quoteStatuses)[number]
-
-
 
 export interface CompanySettings {
   tradeName: string
