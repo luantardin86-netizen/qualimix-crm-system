@@ -216,6 +216,7 @@ export interface Opportunity {
   lossReason: string | null
   quoteId: string | null
   history: { at: string; by: string; text: string }[]
+  archived?: boolean
   demo: boolean
   createdAt: string
 }
