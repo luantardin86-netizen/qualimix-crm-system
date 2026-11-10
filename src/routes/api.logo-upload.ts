@@ -104,7 +104,7 @@ export const Route = createFileRoute('/api/logo-upload')({
                 ? {}
                 : { Authorization: 'Bearer ' + secretKey }),
               'Content-Type': image.mimeType,
-              'Cache-Control': '31536000',
+              'Cache-Control': 'max-age=31536000',
             },
             body: bytes,
           })
