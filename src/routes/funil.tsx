@@ -66,7 +66,7 @@ function Funil() {
 
   const submitLead = async () => {
     setLeadTried(true)
-    const errors = validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue })
+    const errors = validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue }, { leadSources })
     if (!clients.some((client) => client.id === leadClientId && client.active)) {
       errors.clientId = 'Selecione um cliente ativo.'
     }
