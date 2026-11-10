@@ -31,3 +31,4 @@ dist-ssr
 *.sln
 *.sw?
 qualimix_dump/qualimix_dump.sql
+.env
