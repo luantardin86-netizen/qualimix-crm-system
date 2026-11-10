@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Bell, Clock, KanbanSquare, List, Plus, SquareKanban, TriangleAlert } from 'lucide-react'
 import { useStore } from '../data/store'
-import { funnelStages, leadSources, lossReasons, type StageId } from '../data/settings'
+import type { StageId } from '../data/settings'
 import { today, type Opportunity } from '../data/fixtures'
 import { brl, dateBR, daysBetween } from '../lib/format'
 import { Badge, Button, Card, Drawer, EmptyState, Field, Modal, PageHeader, SegTabs, cx, inputCls } from '../components/ui'
@@ -15,7 +15,6 @@ export const Route = createFileRoute('/funil')({
 })
 
 const STALE_DAYS = 7
-const stageLabel = (id: StageId) => funnelStages.find((s) => s.id === id)?.label ?? id
 const isOpen = (o: Opportunity) => o.stage !== 'fechado' && o.stage !== 'perdido'
 
 function followUp(o: Opportunity) {
@@ -27,7 +26,9 @@ function followUp(o: Opportunity) {
 }
 
 function Funil() {
-  const { opportunities, clients, sites, updateOpportunity, createOpportunity, toast, team, currentRole, views, demoMode } = useStore()
+  const { opportunities, clients, sites, updateOpportunity, createOpportunity, toast, team, currentRole, views, demoMode, settings } = useStore()
+  const { funnelStages, leadSources, lossReasons } = settings
+  const stageLabel = (id: StageId) => funnelStages.find((s) => s.id === id)?.label ?? id
   const canEdit = currentRole === 'administrador' || currentRole === 'comercial'
   const [view, setView] = useState<'kanban' | 'tabela'>('kanban')
   const [owner, setOwner] = useState('')
@@ -41,7 +42,7 @@ function Funil() {
   const [leadTitle, setLeadTitle] = useState('')
   const [leadClientId, setLeadClientId] = useState('')
   const [leadSiteId, setLeadSiteId] = useState('')
-  const [leadSource, setLeadSource] = useState<string>(leadSources[0])
+  const [leadSource, setLeadSource] = useState<string>(leadSources[0] ?? '')
   const [leadValue, setLeadValue] = useState('')
   const [leadSaving, setLeadSaving] = useState(false)
   const [leadTried, setLeadTried] = useState(false)
@@ -91,7 +92,7 @@ function Funil() {
       setLeadSiteId('')
       setLeadTried(false)
       setLeadValue('')
-      setLeadSource(leadSources[0])
+      setLeadSource(leadSources[0] ?? '')
     } catch (error) {
       toast({ tone: 'erro', title: 'Não foi possível criar o lead', body: error instanceof Error ? error.message : 'Erro inesperado.' })
     } finally {
