@@ -567,7 +567,16 @@ export const saveTaskOnServer = createServerFn({ method: 'POST' })
     assertRole(profile,roles.commercial)
     await withTransaction(async (tx) => {
       if (data.opportunityId) {
-        const opportunity=await tx.query('select id from public.oportunidades where id=$1 and is_demo=false and arquivada=false',[data.opportunityId])
+        const existingTask = await tx.query<any>(
+          'select oportunidade_id from public.tarefas_comerciais where id=$1 and is_demo=false for update',
+          [data.id],
+        )
+        const keepsExistingArchivedLink = existingTask.rows[0]?.oportunidade_id === data.opportunityId
+        const opportunity = await tx.query(
+          `select id from public.oportunidades
+            where id=$1 and is_demo=false and (arquivada=false or $2::boolean=true)`,
+          [data.opportunityId, keepsExistingArchivedLink],
+        )
         if (!opportunity.rowCount) throw new Error('A oportunidade vinculada não existe, está arquivada ou é de demonstração.')
       }
       await tx.query(
