@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { summarizeMeasures, type MeasureElement } from '../lib/quote'
+import { elementTypes as seedElementTypes } from '../data/settings'
 import { MeasureCalculator } from './MeasureCalculator'
 
 const element = (patch: Partial<MeasureElement>): MeasureElement => ({
@@ -30,6 +31,7 @@ function renderCalculator(kind: 'volume' | 'area', item: MeasureElement) {
       summary={summarizeMeasures(elements, '', kind)}
       onChange={vi.fn()}
       onMargin={vi.fn()}
+      elementTypes={seedElementTypes}
     />,
   )
 }
@@ -94,6 +96,7 @@ describe('calculadora visual de medidas', () => {
         summary={summarizeMeasures([item], '', 'volume')}
         onChange={onChange}
         onMargin={vi.fn()}
+        elementTypes={seedElementTypes}
       />,
     )
 
