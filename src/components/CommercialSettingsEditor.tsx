@@ -212,7 +212,7 @@ function StringListEditor({
             const protectedItem = protectedFirst && index === 0 && item === 'Não informado'
             const duplicate = item.trim() && items.some((candidate, i) => i !== index && candidate.trim().toLocaleLowerCase('pt-BR') === item.trim().toLocaleLowerCase('pt-BR'))
             return (
-              <div key={title + ':' + index + ':' + item} className="flex items-start gap-2">
+              <div key={title + ':' + index} className="flex items-start gap-2">
                 <div className="min-w-0 flex-1">
                   <input
                     value={item}
@@ -407,12 +407,7 @@ export function CommercialSettingsEditor({
   }
 
   const demo = settings.demoRules
-  const readOnly = !isAdmin
-  const displayRule = (key: RuleKey, demoValue: number | null, formatter: (n: number) => string = brl) => (
-    readOnly
-      ? valueDisplay(settings.officialRules[key === 'freight.fixed' || key === 'freight.perKm' ? 'freight' : key === 'pumping.fixed' || key === 'pumping.perM3' || key === 'pumping.perHour' || key === 'pumping.minimum' ? 'pumping' : key === 'minVolume.m3' || key === 'minVolume.minOrderValue' ? 'minVolume' : key === 'stay.toleranceMin' || key === 'stay.perHour' ? 'stay' : key === 'floor.minArea' ? 'floor' : key === 'maxDiscountPctWithoutApproval' || key === 'validityDays' || key === 'quantityDecimals' ? key : 'freight'] as never, formatter)
-      : null
-  )
+
 
   const numericField = (key: RuleKey, label = ruleLabels[key], formatter?: (n: number) => string) => (
     <div key={key} className="min-w-0">
