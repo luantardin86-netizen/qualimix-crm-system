@@ -27,7 +27,7 @@ CRM da Qualimix para gestão comercial e operacional de concreto usinado, concre
 
 1. Copie `.env.example` para `.env`.
 2. Configure no ambiente do servidor `DATABASE_URL` e `SUPABASE_CA_CERT_BASE64`. Não use prefixo `VITE_` para segredos.
-3. Para upload do logo, configure também `SUPABASE_URL` e `SUPABASE_SECRET_KEY` no servidor. A URL pode ser a mesma de `VITE_SUPABASE_URL`; a chave secreta (`sb_secret_`) nunca pode chegar ao navegador.
+3. Para upload do logo, configure também `SUPABASE_SECRET_KEY` (a URL usa `SUPABASE_URL` ou, como alternativa, a já existente `VITE_SUPABASE_URL`) no servidor. A URL pode ser a mesma de `VITE_SUPABASE_URL`; a chave secreta (`sb_secret_`) nunca pode chegar ao navegador.
 4. O upload usa o bucket público `qualimix-branding` (somente leitura pública), com limite de 2 MB e tipos PNG, JPEG e WebP. O envio é feito pelo endpoint do servidor depois de validar a sessão e o perfil administrador; não crie policy de INSERT para `anon` nem para `authenticated`.
 5. Instale e inicie:
 
