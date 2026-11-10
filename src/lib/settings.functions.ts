@@ -210,12 +210,9 @@ async function loadProductRows(canViewSales: boolean): Promise<ProductRow[]> {
  * Carrega as configurações persistidas e o catálogo completo.
  * Antes da migration/seed existir, mantém defaults explícitos e settingsReady=false.
  */
-export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): Promise<LoadedSettings> => {
-  const profile = await requireCurrentProfile()
-  const isAdmin = profile.perfil === 'admin' || profile.role === 'administrador'
-  const canViewSales = isAdmin || profile.role === 'comercial' || profile.role === 'consulta'
+/** Snapshot server-side das configurações persistidas; reutilizado por operações de CRM. */
+export async function loadSettingsSnapshot(canViewSales: boolean): Promise<LoadedSettings> {
   const products = await loadProductRows(canViewSales)
-
   try {
     const result = await getPool().query<{ config: Record<string, unknown>; updated_at: string }>(
       'SELECT CASE WHEN $1 THEN to_jsonb(c) ELSE to_jsonb(c) - \'regras_oficiais\' END AS config, ' +
@@ -233,6 +230,13 @@ export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): 
     if ((error as { code?: string })?.code !== '42P01') throw error
     return buildLoadedSettings(null, products, canViewSales)
   }
+}
+
+export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): Promise<LoadedSettings> => {
+  const profile = await requireCurrentProfile()
+  const isAdmin = profile.perfil === 'admin' || profile.role === 'administrador'
+  const canViewSales = isAdmin || profile.role === 'comercial' || profile.role === 'consulta'
+  return loadSettingsSnapshot(canViewSales)
 })
 
 export const saveSettings = createServerFn({ method: 'POST' })
