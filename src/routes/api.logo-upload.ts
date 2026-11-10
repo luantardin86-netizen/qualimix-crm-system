@@ -58,7 +58,7 @@ export const Route = createFileRoute('/api/logo-upload')({
           return errorResponse('Arquivo inválido. Envie uma imagem PNG, JPG ou WebP válida.', 415)
         }
 
-        const rawSupabaseUrl = process.env.SUPABASE_URL?.trim()
+        const rawSupabaseUrl = process.env.SUPABASE_URL?.trim() || process.env.VITE_SUPABASE_URL?.trim()
         const secretKey = process.env.SUPABASE_SECRET_KEY?.trim()
           || process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()
         if (!rawSupabaseUrl || !secretKey) {
