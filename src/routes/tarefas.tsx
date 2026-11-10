@@ -41,7 +41,7 @@ function Tarefas() {
   const { tasks, opportunities, clients, saveTask, toast, currentRole, views } = useStore()
   const today = todayInSaoPaulo()
   const canEdit = currentRole === 'administrador' || currentRole === 'comercial'
-  const initialOpportunity = opportunities.find((item) => item.id === search.oportunidade)
+  const initialOpportunity = opportunities.find((item) => item.id === search.oportunidade && !item.archived)
   const [form, setForm] = useState(() => ({
     ...blankForm(),
     title: initialOpportunity
