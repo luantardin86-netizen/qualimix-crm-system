@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Plus, Trash2 } from 'lucide-react'
 import { computeElement, type MeasureElement, type MeasureKind, type MeasureSummary } from '../lib/quote'
 import { num, parseDecimal } from '../lib/format'
-import { useStore } from '../data/store'
+import { useOptionalStore } from '../data/store'
 import { Button, cx, inputCls } from './ui'
 
 export const newId = () =>
@@ -97,8 +97,8 @@ export function MeasureCalculator({
   onMargin: (v: string) => void
   elementTypes?: string[]
 }) {
-  const { settings } = useStore()
-  const availableElementTypes = elementTypes ?? settings.elementTypes
+  const store = useOptionalStore()
+  const availableElementTypes = elementTypes ?? store?.settings.elementTypes ?? []
   const unit = kind === 'volume' ? 'm³' : 'm²'
   const results = useMemo(() => elements.map((element) => computeElement(element, kind)), [elements, kind])
   const patch = (id: string, value: Partial<MeasureElement>) =>
