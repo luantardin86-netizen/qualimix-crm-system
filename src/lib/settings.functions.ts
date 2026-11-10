@@ -398,11 +398,11 @@ export const getPublicBranding = createServerFn({ method: 'GET' }).handler(async
     )
     const row = result.rows[0]
     return {
-      tradeName: row?.nome_comercial?.trim() || 'Qualimix',
+      tradeName: row?.nome_comercial?.trim() || '',
       logoUrl: row?.logo_url ?? null,
     }
   } catch (error) {
     if ((error as { code?: string })?.code !== '42P01') throw error
-    return { tradeName: 'Qualimix', logoUrl: null }
+    return { tradeName: '', logoUrl: null }
   }
 })
