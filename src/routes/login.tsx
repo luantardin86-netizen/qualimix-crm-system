@@ -10,7 +10,7 @@ export const Route = createFileRoute('/login')({
 })
 
 function LoginPage() {
-  const [branding, setBranding] = useState<{ tradeName: string; logoUrl: string | null }>({ tradeName: 'Qualimix', logoUrl: null })
+  const [branding, setBranding] = useState<{ tradeName: string; logoUrl: string | null }>({ tradeName: '', logoUrl: null })
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
