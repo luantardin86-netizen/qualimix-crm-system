@@ -27,6 +27,4 @@ export const quoteStatuses = [
 ] as const
 export type QuoteStatus = (typeof quoteStatuses)[number]
 
-export type QuoteStatus = (typeof quoteStatuses)[number]
-
 export type StageId = 'novo' | 'atendimento' | 'levantamento' | 'elaboracao' | 'enviado' | 'negociacao' | 'fechado' | 'perdido'
