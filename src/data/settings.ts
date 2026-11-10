@@ -18,17 +18,6 @@ export const catalog: CatalogItem[] = [
   { id: 'm-fibra', code: 'MAT-FIB', name: 'Adição de fibra', category: 'material', unit: 'm³', description: 'Adição de fibra ao concreto', basePrice: null, demoPrice: 38, active: true, validFrom: null },
 ]
 
-export const categoryLabel: Record<CatalogItem['category'], string> = {
-  concreto: 'Concreto',
-  piso: 'Piso',
-  bombeamento: 'Bombeamento',
-  frete: 'Frete',
-  estadia: 'Estadia',
-  servico: 'Serviço',
-  material: 'Material',
-  equipamento: 'Equipamento',
-}
-
 /** Regras oficiais: nada confirmado ainda pela Qualimix → tudo pendente. */
 export const officialRules: CommercialRules = {
   freight: {
@@ -159,22 +148,6 @@ export const lossReasons = [
   'Fora da região atendida',
   'Outro',
 ]
-
-export const quoteStatuses = [
-  'Rascunho',
-  'Aguardando informações',
-  'Aguardando aprovação',
-  'Aprovado internamente',
-  'Enviado ao cliente',
-  'Em negociação',
-  'Aceito',
-  'Recusado',
-  'Expirado',
-  'Cancelado',
-] as const
-export type QuoteStatus = (typeof quoteStatuses)[number]
-
-
 
 export interface CompanySettings {
   tradeName: string
@@ -350,23 +323,4 @@ export function validateSettings(value: AppSettings): AppSettings {
   ]
   if (prices.some((price) => price !== null && (!Number.isFinite(price) || price < 0))) throw new Error('Preços, prazos e limites não podem ser negativos ou inválidos.')
   return next
-}
-
-/** Itens que ainda precisam ser confirmados pela empresa. */
-export function pendingSettings(settings: AppSettings = createDefaultSettings()): string[] {
-  const p: string[] = []
-  const missingPrices = settings.catalog.filter((item) => item.basePrice === null).length
-  if (missingPrices) p.push(String(missingPrices) + ' preços do catálogo')
-  if (!settings.company.cnpj || !settings.company.legalName || !settings.company.address)
-    p.push('Dados institucionais (razão social, CNPJ e endereço)')
-  if (settings.officialRules.freight.fixed === null && settings.officialRules.freight.perKm === null && settings.officialRules.freight.regions.every((region) => region.price === null))
-    p.push('Regras de frete')
-  if (settings.officialRules.pumping.fixed === null && settings.officialRules.pumping.perM3 === null && settings.officialRules.pumping.perHour === null)
-    p.push('Regras de bombeamento')
-  if (settings.officialRules.minVolume.m3 === null) p.push('Volume mínimo')
-  if (settings.officialRules.stay.perHour === null) p.push('Regras de estadia')
-  if (settings.paymentMethods.every((method) => method.enabledOfficial === null))
-    p.push('Formas de pagamento aceitas')
-  if (settings.officialRules.validityDays === null) p.push('Validade padrão das propostas')
-  return p
 }
