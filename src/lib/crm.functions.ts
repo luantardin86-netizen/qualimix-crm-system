@@ -1,7 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { Client, Opportunity, QuoteRecord, Site, TeamUser, QuoteType } from '../data/fixtures'
 import { quoteContext } from '../data/derived'
-import { createDefaultSettings } from '../data/settings'
+import { createDefaultSettings, normalizeSettings } from '../data/settings'
 import {
   computeQuote,
   defaultExtras,
@@ -646,7 +646,7 @@ export const persistQuote = createServerFn({ method: 'POST' })
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
     const db = getPool()
-    const [siteResult, productResult, opportunityResult] = await Promise.all([
+    const [siteResult, productResult, opportunityResult, configResult] = await Promise.all([
       db.query(
         `SELECT o.id
          FROM public.obras o
@@ -668,6 +668,9 @@ export const persistQuote = createServerFn({ method: 'POST' })
             [data.opportunityId, data.clientId, data.siteId],
           )
         : Promise.resolve({ rows: [] }),
+      db.query<{ regras_oficiais: unknown; formas_pagamento: unknown }>(
+        "SELECT regras_oficiais, formas_pagamento FROM public.configuracoes WHERE id = 'default' LIMIT 1",
+      ),
     ])
     if (!siteResult.rows.length) throw new Error('A obra não pertence ao cliente selecionado ou está inativa.')
     if (data.opportunityId && !opportunityResult.rows.length) {
@@ -685,9 +688,45 @@ export const persistQuote = createServerFn({ method: 'POST' })
       return line
     })
 
+    const config = configResult.rows[0]
+    if (!config) throw new Error('As configurações comerciais não foram encontradas no banco. Não é possível salvar o orçamento com regras padrão.')
+    const parseConfigJson = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value
+      try { return JSON.parse(value) as unknown } catch { return null }
+    }
+    const rawPaymentMethods = parseConfigJson(config.formas_pagamento)
+    const paymentMethods = Array.isArray(rawPaymentMethods)
+      ? rawPaymentMethods.flatMap((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+          const method = item as Record<string, unknown>
+          if (typeof method.id !== 'string' || typeof method.label !== 'string') return []
+          const enabled = method.enabled_official ?? method.enabledOfficial
+          return [{
+            id: method.id,
+            label: method.label,
+            enabledOfficial: typeof enabled === 'boolean' ? enabled : null,
+            enabledDemo: false,
+          }]
+        })
+      : []
+    const enabledPaymentMethodIds = paymentMethods
+      .filter((method) => method.enabledOfficial === true)
+      .map((method) => method.id)
+    const rejectedPaymentMethod = data.paymentMethodIds.find((id) => !enabledPaymentMethodIds.includes(id))
+    if (rejectedPaymentMethod) {
+      const method = paymentMethods.find((item) => item.id === rejectedPaymentMethod)
+      throw new Error(`A forma de pagamento ${method?.label ?? rejectedPaymentMethod} não está aceita nas configurações comerciais.`)
+    }
+
+    const persistedSettings = normalizeSettings({
+      ...createDefaultSettings(),
+      catalog: dbCatalog,
+      officialRules: parseConfigJson(config.regras_oficiais),
+      paymentMethods,
+    })
     const volume = summarizeMeasures(data.volumeElements, data.volumeMargin, 'volume')
     const area = summarizeMeasures(data.areaElements, data.areaMargin, 'area')
-    const ctx = quoteContext(false, { ...createDefaultSettings(), catalog: dbCatalog })
+    const ctx = quoteContext(false, persistedSettings)
     const result = computeQuote({
       clientId: data.clientId, siteId: data.siteId, lines, volume, area,
       extras: data.extras, paymentMethodIds: data.paymentMethodIds,
