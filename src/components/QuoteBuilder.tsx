@@ -231,7 +231,7 @@ export function QuoteBuilder({ origin, opportunityId, editQuoteId }: { origin?: 
   const canIssue = result.canIssue && !blockers.length && !approvals.length
 
   const client = clients.find((c) => c.id === draft.clientId)
-  const clientSites = sites.filter((s) => s.clientId === draft.clientId)
+  const clientSites = sites.filter((s) => s.clientId === draft.clientId && s.active !== false)
   const site = sites.find((s) => s.id === draft.siteId)
   const linkedOpportunity = opportunities.find((o) => o.id === draft.opportunityId)
 
@@ -381,7 +381,7 @@ export function QuoteBuilder({ origin, opportunityId, editQuoteId }: { origin?: 
                     value={draft.clientId}
                     onChange={(e) => {
                       const cid = e.target.value
-                      const own = sites.filter((s) => s.clientId === cid)
+                      const own = sites.filter((s) => s.clientId === cid && s.active !== false)
                       setDraft((d) => ({ ...d, clientId: cid, siteId: own.length === 1 ? own[0].id : '', opportunityId: cid === d.clientId ? d.opportunityId : null }))
                     }}
                   >
