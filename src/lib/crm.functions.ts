@@ -158,12 +158,18 @@ export const loadCrmData = createServerFn({ method: 'GET' }).handler(async (): P
   }
 })
 
-export const loadManagedSites = createServerFn({ method: 'GET' }).handler(async () => {
+type ManagedSiteRecord = {
+  id: string; cliente_id: string; cliente_nome: string; nome: string; endereco: string;
+  cidade: string; regiao: string; contato_nome: string; contato_telefone: string;
+  tipo_servico: string; observacoes_acesso: string; restricoes: string; ativa: boolean;
+}
+
+export const loadManagedSites = createServerFn({ method: 'GET' }).handler(async (): Promise<ManagedSiteRecord[]> => {
   await requireCurrentProfile()
-  const result = await getPool().query(
+  const result = await getPool().query<ManagedSiteRecord>(
     `select o.id, o.cliente_id, c.nome as cliente_nome, o.nome, o.endereco, o.cidade, o.regiao,
             o.contato_nome, o.contato_telefone, o.tipo_servico, o.observacoes_acesso,
-            o.restricoes, o.ativa, o.created_at
+            o.restricoes, o.ativa
        from public.obras o
        join public.clientes c on c.id = o.cliente_id
       where o.is_demo = false and c.is_demo = false
@@ -384,6 +390,83 @@ export const persistClient = createServerFn({ method: 'POST' })
       }
       throw error
     }
+    return { success: true }
+  })
+
+export const updateClientOnServer = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    if (!input || typeof input !== 'object' || Array.isArray(input)) throw new Error('Dados do cliente inválidos.')
+    const x = input as Record<string, unknown>
+    const read = (key: string, label: string, max: number, required = false) => {
+      if (typeof x[key] !== 'string') {
+        if (required) throw new Error('Informe ' + label + '.')
+        return ''
+      }
+      const value = (x[key] as string).trim()
+      if ((required && !value) || value.length > max) throw new Error(label + ' inválido.')
+      return value
+    }
+    const id = read('id', 'identificador do cliente', 80, true)
+    const client = {
+      id,
+      name: read('name', 'nome do cliente', 160, true),
+      tradeName: read('tradeName', 'nome fantasia', 120),
+      document: onlyDigits(read('document', 'documento', 20)),
+      phone: normalizeBrazilPhone(read('phone', 'telefone', 20)),
+      whatsapp: normalizeBrazilPhone(read('whatsapp', 'WhatsApp', 20)),
+      email: read('email', 'e-mail', 254),
+      address: read('address', 'endereço', 200),
+      city: read('city', 'cidade', 100),
+      region: read('region', 'região', 80, true),
+      type: read('type', 'tipo de cliente', 40, true),
+      source: read('source', 'origem', 40, true),
+      notes: read('notes', 'observações', 2000),
+    }
+    const errors = validateClientFields(client)
+    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
+    return client
+  })
+  .handler(async ({ data }) => {
+    assertSameOrigin()
+    const profile = await requireCurrentProfile()
+    if (profile.perfil !== 'admin') throw new Error('Somente administradores podem editar clientes.')
+    try {
+      const result = await getPool().query(
+        `update public.clientes
+            set nome=$2,nome_fantasia=$3,documento=$4,telefone=$5,whatsapp=$6,email=$7,
+                endereco=$8,cidade=$9,regiao=$10,tipo=$11,origem=$12,observacoes=$13
+          where id=$1 and is_demo=false`,
+        [data.id,data.name,data.tradeName,data.document || null,data.phone,data.whatsapp,
+         data.email,data.address,data.city,data.region,data.type,data.source,data.notes],
+      )
+      if (!result.rowCount) throw new Error('Cliente não encontrado.')
+    } catch (error) {
+      if ((error as { code?: string; constraint?: string })?.code === '23505') {
+        throw new Error('Esse CPF/CNPJ já está cadastrado para outro cliente.')
+      }
+      throw error
+    }
+    return { success: true }
+  })
+
+export const setClientActiveOnServer = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    if (!input || typeof input !== 'object') throw new Error('Dados do cliente inválidos.')
+    const x = input as Record<string, unknown>
+    if (typeof x.id !== 'string' || !x.id.trim() || x.id.length > 80 || typeof x.active !== 'boolean') {
+      throw new Error('Identificador ou situação do cliente inválidos.')
+    }
+    return { id: x.id.trim(), active: x.active }
+  })
+  .handler(async ({ data }) => {
+    assertSameOrigin()
+    const profile = await requireCurrentProfile()
+    if (profile.perfil !== 'admin') throw new Error('Somente administradores podem arquivar ou reativar clientes.')
+    const result = await getPool().query(
+      'update public.clientes set ativo=$2 where id=$1 and is_demo=false',
+      [data.id,data.active],
+    )
+    if (!result.rowCount) throw new Error('Cliente não encontrado.')
     return { success: true }
   })
 
