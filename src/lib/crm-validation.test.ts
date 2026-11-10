@@ -9,6 +9,12 @@ import {
   validateOptionalDecimal,
 } from './crm-validation'
 
+const lists = {
+  clientTypes: ['Construtora'],
+  regions: ['Região Norte'],
+  leadSources: ['Indicação', 'WhatsApp 1'],
+}
+
 const validClient = {
   name: 'Construtora Almeida Ltda',
   tradeName: 'Almeida Obras',
@@ -26,7 +32,7 @@ const validClient = {
 
 describe('CRM field validation', () => {
   it('accepts valid client fields and normalizes a Brazilian phone with country code', () => {
-    expect(validateClientFields(validClient)).toEqual({})
+    expect(validateClientFields(validClient, lists)).toEqual({})
     expect(normalizeBrazilPhone('+55 (61) 99999-9999')).toBe('61999999999')
     expect(phoneValidationError('+55 (61) 99999-9999', true)).toBeNull()
   })
@@ -40,7 +46,7 @@ describe('CRM field validation', () => {
       type: 'Categoria inventada',
       region: 'Região inexistente',
       source: 'Origem inventada',
-    })
+    }, lists)
     expect(errors.document).toMatch(/CPF inválido/)
     expect(errors.phone).toBeTruthy()
     expect(errors.email).toBeTruthy()
@@ -52,6 +58,7 @@ describe('CRM field validation', () => {
   it('rejects duplicate CPF/CNPJ and validates optional job details', () => {
     const errors = validateClientFields(
       { ...validClient, siteName: 'Residencial Jardim', sitePhone: '9999', siteRestrictions: 'x'.repeat(501) },
+      lists,
       [{ id: 'existing', document: '52998224725' }],
     )
     expect(errors.document).toMatch(/já está cadastrado/)
@@ -68,7 +75,7 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'WhatsApp 1',
       estimatedValue: '25.000,50',
-    })).toEqual({})
+    }, lists.leadSources)).toEqual({})
 
     expect(validateLeadFields({
       title: 'A',
@@ -76,7 +83,7 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'desconhecido',
       estimatedValue: '-10',
-    })).toEqual({
+    }, lists.leadSources)).toEqual({
       title: 'Informe um título entre 3 e 180 caracteres.',
       clientId: 'Selecione um cliente ativo.',
       source: 'Selecione a origem do contato.',
@@ -91,7 +98,7 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'Indicação',
       estimatedValue: '25.1234',
-    })
+    }, lists.leadSources)
     expect(errors.estimatedValue).toMatch(/duas casas decimais/)
   })
 
