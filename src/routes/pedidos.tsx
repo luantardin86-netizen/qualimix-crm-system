@@ -209,7 +209,7 @@ function Pedidos() {
                       </td>
                       <td className="px-4 py-3 text-right tabular">{brlCents(costCents)}</td>
                       <td className={cx('px-4 py-3 text-right font-semibold tabular', balance < 0 && 'text-brand')}>{brlCents(balance)}</td>
-                      <td className="px-4 py-3"><Badge>{order.status}</Badge></td>
+                      <td className="px-4 py-3"><Badge>{order.status}</Badge>{order.cancellationReason && <span className="mt-1 block max-w-[220px] text-xs text-muted" title={order.cancellationReason}>Motivo: {order.cancellationReason}</span>}</td>
                       <td className="px-4 py-3"><Link to="/orcamentos" className="text-brand hover:underline">{order.quoteId}</Link></td>
                       {canEditOrderAmount && <td className="px-4 py-3 text-right">{order.status !== 'Cancelada' && <Button size="sm" variant="danger" onClick={() => void cancelOrder(order.id, order.number)}><XCircle className="h-4 w-4" /> Cancelar pedido</Button>}</td>}
                     </tr>
