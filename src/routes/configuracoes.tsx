@@ -94,7 +94,9 @@ function CompanySettingsEditor({
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft)
   const logoPreviewSrc = logoPreviewFailed
     ? null
-    : logoLocalPreview ?? (draft.logoUrl.trim() || null)
+    : logoLocalPreview ?? (
+      draft.logoUrl.trim() && isHttpsUrl(draft.logoUrl) ? draft.logoUrl.trim() : null
+    )
 
   useEffect(() => {
     if (!dirty) {
