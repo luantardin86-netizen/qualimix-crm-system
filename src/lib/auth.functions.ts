@@ -231,7 +231,7 @@ export const updateUserProfile = createServerFn({ method: 'POST' })
     return {
       id: x.id,
       name: requireText(x.name, 'o nome', 2, 100),
-      role: normalizeAssignedRole(x.role),
+      role: x.role == null ? null : normalizeAssignedRole(x.role),
     }
   })
   .handler(async ({ data }) => {
@@ -246,10 +246,11 @@ export const updateUserProfile = createServerFn({ method: 'POST' })
       const target = result.rows[0]
       if (!target) throw new Error('Usuário não encontrado.')
       const wasAdmin = target.perfil === 'admin' || target.perfil === 'administrador'
-      if (current.id === data.id && target.perfil !== data.role) {
+      const nextRole = data.role ?? target.perfil
+      if (current.id === data.id && target.perfil !== nextRole) {
         throw new Error('Por segurança, não altere o próprio perfil de acesso. Outro administrador deve fazer isso.')
       }
-      if (wasAdmin && target.ativo && data.role !== 'admin' && data.role !== 'administrador') {
+      if (wasAdmin && target.ativo && nextRole !== 'admin' && nextRole !== 'administrador') {
         const count = await client.query<{ count: number }>(
           "SELECT count(*)::int AS count FROM public.perfis WHERE ativo=true AND perfil IN ('admin','administrador')",
         )
@@ -257,10 +258,10 @@ export const updateUserProfile = createServerFn({ method: 'POST' })
           throw new Error('Não é possível rebaixar o último administrador ativo.')
         }
       }
-      const roleChanged = target.perfil !== data.role
+      const roleChanged = target.perfil !== nextRole
       await client.query(
         'UPDATE public.perfis SET nome=$2, perfil=$3 WHERE id=$1',
-        [data.id,data.name,data.role],
+        [data.id,data.name,nextRole],
       )
       if (roleChanged) {
         await client.query(
