@@ -1,4 +1,4 @@
-import type { QuoteStatus } from '../data/settings'
+import type { QuoteStatus } from '../data/constants'
 import { cx } from './ui'
 
 export const statusTone = (s: QuoteStatus) =>
