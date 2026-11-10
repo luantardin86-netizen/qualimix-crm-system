@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Copy, Eye, FileText, MessageCircle, Plus, Search } from 'lucide-react'
 import { useStore } from '../data/store'
-import { paymentMethods, quoteStatuses } from '../data/settings'
+import { quoteStatuses } from '../data/settings'
 import { today } from '../data/fixtures'
 import type { EvaluatedQuote } from '../data/derived'
 import { summarizeMeasures } from '../lib/quote'
@@ -21,7 +21,8 @@ export const Route = createFileRoute('/orcamentos/')({
 
 function Orcamentos() {
   const { q: initialQ } = Route.useSearch()
-  const { quotes, clients, sites, demoMode, team, currentRole, views } = useStore()
+  const { quotes, clients, sites, demoMode, team, currentRole, views, settings } = useStore()
+  const { paymentMethods } = settings
   const canEdit = currentRole === 'administrador' || currentRole === 'comercial'
   const [q, setQ] = useState(initialQ ?? '')
   const [status, setStatus] = useState<string>('')
