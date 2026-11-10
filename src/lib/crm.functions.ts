@@ -16,7 +16,7 @@ import { loadSettingsSnapshot } from './settings.functions'
 import { onlyDigits } from './documents'
 import { addDays } from './format'
 import { todayInSaoPaulo } from './clock'
-import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateOptionalDecimal } from './crm-validation'
+import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateLeadFields, validateOptionalDecimal } from './crm-validation'
 
 const isoDate = (value: unknown): string => {
   if (value instanceof Date) return value.toISOString().slice(0, 10)
@@ -392,22 +392,19 @@ export const createOpportunity = createServerFn({ method: 'POST' })
   .validator((input: unknown): OpportunityCreateInput => {
     if (!input || typeof input !== 'object') throw new Error('Dados da oportunidade inválidos.')
     const data = input as Record<string, unknown>
-    const errors = validateLeadFields({
-      title: data.title,
-      clientId: data.clientId,
-      siteId: data.siteId,
-      source: data.source,
-      estimatedValue: data.estimatedValue == null ? '' : String(data.estimatedValue),
-    })
-    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
+    if (typeof data.title !== 'string' || typeof data.clientId !== 'string' ||
+        (data.siteId !== null && data.siteId !== undefined && typeof data.siteId !== 'string') ||
+        typeof data.source !== 'string') {
+      throw new Error('Informe os dados obrigatórios da oportunidade.')
+    }
     const estimatedValue = data.estimatedValue == null || data.estimatedValue === ''
       ? null
       : parseOptionalAmount(String(data.estimatedValue))
     return {
-      title: String(data.title).trim(),
-      clientId: String(data.clientId),
+      title: data.title.trim(),
+      clientId: data.clientId,
       siteId: typeof data.siteId === 'string' && data.siteId ? data.siteId : null,
-      source: String(data.source).trim(),
+      source: data.source.trim(),
       estimatedValue,
     }
   })
@@ -415,6 +412,18 @@ export const createOpportunity = createServerFn({ method: 'POST' })
     assertSameOrigin()
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
+    const settings = await loadSettingsSnapshot(true)
+    if (!settings.settingsReady) {
+      throw new Error('As configurações do CRM ainda não foram carregadas do banco. Contate o administrador.')
+    }
+    const errors = validateLeadFields({
+      title: data.title,
+      clientId: data.clientId,
+      siteId: data.siteId ?? '',
+      source: data.source,
+      estimatedValue: data.estimatedValue === null ? '' : String(data.estimatedValue),
+    }, settings.leadSources)
+    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
     const db = getPool()
     const clientResult = await db.query(
       'SELECT id FROM public.clientes WHERE id = $1 AND ativo = true AND is_demo = false LIMIT 1',
