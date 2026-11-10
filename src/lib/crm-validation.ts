@@ -1,8 +1,13 @@
-import { clientTypes, leadSources, regions } from '../data/settings'
 import { onlyDigits, validateDocument } from './documents'
 import { parseDecimal } from './format'
 
 type AnyRecord = Record<string, unknown>
+
+export type CrmValidationLists = {
+  clientTypes: readonly string[]
+  regions: readonly string[]
+  leadSources: readonly string[]
+}
 
 const value = (record: AnyRecord, key: string): string => {
   const raw = record[key]
@@ -34,6 +39,7 @@ export function emailValidationError(raw: string): string | null {
 
 export function validateClientFields(
   input: AnyRecord,
+  lists: CrmValidationLists,
   existing: readonly { id?: string; document?: string | null }[] = [],
 ): Record<string, string> {
   const errors: Record<string, string> = {}
@@ -52,7 +58,7 @@ export function validateClientFields(
 
   if (name === '\u0000' || name.length < 3 || name.length > 160) errors.name = 'Informe um nome ou razão social entre 3 e 160 caracteres.'
   if (tradeName === '\u0000' || tradeName.length > 120) errors.tradeName = 'O nome fantasia deve ter até 120 caracteres.'
-  if (!clientTypes.includes(type as (typeof clientTypes)[number])) errors.type = 'Selecione um tipo de cliente válido.'
+  if (!lists.clientTypes.includes(type)) errors.type = 'Selecione um tipo de cliente válido.'
   if (document === '\u0000') errors.document = 'Documento inválido.'
   else {
     const documentError = validateDocument(document)
@@ -67,8 +73,8 @@ export function validateClientFields(
   if (email === '\u0000' || email.length > 254 || emailValidationError(email)) errors.email = emailValidationError(email) ?? 'E-mail inválido.'
   if (address === '\u0000' || address.length > 200) errors.address = 'O endereço deve ter até 200 caracteres.'
   if (city === '\u0000' || city.length > 100) errors.city = 'A cidade deve ter até 100 caracteres.'
-  if (!regions.includes(region)) errors.region = 'Selecione uma região de atendimento válida.'
-  if (!leadSources.includes(source as (typeof leadSources)[number])) errors.source = 'Selecione uma origem válida.'
+  if (!lists.regions.includes(region)) errors.region = 'Selecione uma região de atendimento válida.'
+  if (!lists.leadSources.includes(source)) errors.source = 'Selecione uma origem válida.'
   if (notes === '\u0000' || notes.length > 2000) errors.notes = 'As observações devem ter até 2.000 caracteres.'
 
   const siteName = value(input, 'siteName')
@@ -90,7 +96,7 @@ export function validateClientFields(
   return errors
 }
 
-export function validateLeadFields(input: AnyRecord): Record<string, string> {
+export function validateLeadFields(input: AnyRecord, leadSources: readonly string[]): Record<string, string> {
   const errors: Record<string, string> = {}
   const title = value(input, 'title')
   const clientId = value(input, 'clientId')
@@ -101,7 +107,7 @@ export function validateLeadFields(input: AnyRecord): Record<string, string> {
   if (title === '\u0000' || title.length < 3 || title.length > 180) errors.title = 'Informe um título entre 3 e 180 caracteres.'
   if (clientId === '\u0000' || !clientId || clientId.length > 80) errors.clientId = 'Selecione um cliente ativo.'
   if (siteId === '\u0000' || siteId.length > 80) errors.siteId = 'Selecione uma obra válida.'
-  if (!leadSources.includes(source as (typeof leadSources)[number])) errors.source = 'Selecione a origem do contato.'
+  if (!leadSources.includes(source)) errors.source = 'Selecione a origem do contato.'
   if (estimatedValue === '\u0000') errors.estimatedValue = 'Informe um valor numérico válido.'
   else if (estimatedValue) {
     const parsed = parseDecimal(estimatedValue)
