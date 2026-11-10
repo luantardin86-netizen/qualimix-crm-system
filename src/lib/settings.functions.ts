@@ -207,10 +207,10 @@ async function loadProductRows(canViewSales: boolean): Promise<ProductRow[]> {
 }
 
 /**
- * Carrega as configurações persistidas e o catálogo completo.
- * Antes da migration/seed existir, mantém defaults explícitos e settingsReady=false.
+ * Snapshot server-side das configurações persistidas e do catálogo.
+ * Se a configuração principal não existir, retorna defaults com settingsReady=false.
+ * Reutilizado por operações autenticadas do CRM para validar e calcular no servidor.
  */
-/** Snapshot server-side das configurações persistidas; reutilizado por operações de CRM. */
 export async function loadSettingsSnapshot(canViewSales: boolean): Promise<LoadedSettings> {
   const products = await loadProductRows(canViewSales)
   try {
