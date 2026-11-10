@@ -1,7 +1,6 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { Client, Opportunity, QuoteRecord, Site, TeamUser, QuoteType } from '../data/fixtures'
 import { quoteContext } from '../data/derived'
-import { createDefaultSettings, leadSources, lossReasons } from '../data/settings'
 import {
   computeQuote,
   defaultExtras,
@@ -13,10 +12,11 @@ import {
 } from './quote'
 import { assertSameOrigin, requireCurrentProfile, type AuthProfile } from './auth.server'
 import { getPool, withTransaction } from './db.server'
+import { loadSettingsSnapshot } from './settings.functions'
 import { onlyDigits } from './documents'
 import { addDays } from './format'
 import { todayInSaoPaulo } from './clock'
-import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateLeadFields, validateOptionalDecimal } from './crm-validation'
+import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateOptionalDecimal } from './crm-validation'
 
 const isoDate = (value: unknown): string => {
   if (value instanceof Date) return value.toISOString().slice(0, 10)
@@ -181,18 +181,6 @@ export const persistClient = createServerFn({ method: 'POST' })
       }
     }
 
-    const errors = validateClientFields({
-      ...rawClient,
-      siteName: rawSite?.name,
-      siteAddress: rawSite?.address,
-      siteContact: rawSite?.contactName,
-      sitePhone: rawSite?.contactPhone,
-      siteRestrictions: rawSite?.restrictions,
-    })
-    if (Object.keys(errors).length) {
-      throw new Error(Object.values(errors).join(' '))
-    }
-
     const readText = (value: unknown, label: string, max: number): string => {
       if (value == null) return ''
       if (typeof value !== 'string') throw new Error(`Campo inválido: ${label}.`)
@@ -241,6 +229,25 @@ export const persistClient = createServerFn({ method: 'POST' })
     const profile = await requireCurrentProfile()
     if (profile.perfil !== 'admin') {
       throw new Error('Somente administradores podem cadastrar novos clientes.')
+    }
+    const settings = await loadSettingsSnapshot(true)
+    if (!settings.settingsReady) {
+      throw new Error('As configurações do CRM ainda não foram carregadas do banco. Contate o administrador.')
+    }
+    const validationErrors = validateClientFields({
+      ...data.client,
+      siteName: data.site?.name,
+      siteAddress: data.site?.address,
+      siteContact: data.site?.contactName,
+      sitePhone: data.site?.contactPhone,
+      siteRestrictions: data.site?.restrictions,
+    }, {
+      clientTypes: settings.clientTypes,
+      regions: settings.regions,
+      leadSources: settings.leadSources,
+    })
+    if (Object.keys(validationErrors).length) {
+      throw new Error(Object.values(validationErrors).join(' '))
     }
     const c = data.client
     try {
@@ -291,6 +298,17 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
     assertSameOrigin()
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
+    const settings = await loadSettingsSnapshot(true)
+    if (!settings.settingsReady) {
+      throw new Error('As configurações do CRM ainda não foram carregadas do banco. Contate o administrador.')
+    }
+    const currentOpportunity = await getPool().query<{ origem: string; motivo_perda: string | null }>(
+      'SELECT origem, motivo_perda FROM public.oportunidades WHERE id = $1 AND is_demo = false LIMIT 1',
+      [data.id],
+    )
+    if (!currentOpportunity.rows[0]) throw new Error('Oportunidade não encontrada.')
+    const currentSource = currentOpportunity.rows[0].origem
+    const currentLossReason = currentOpportunity.rows[0].motivo_perda
     const allowed: Record<string, string> = {
       title: 'titulo', clientId: 'cliente_id', siteId: 'obra_id', stage: 'etapa',
       estimatedValue: 'valor_estimado', source: 'origem', lastContact: 'ultimo_contato',
@@ -307,7 +325,7 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
       if (key === 'stage' && !['novo','atendimento','levantamento','elaboracao','enviado','negociacao','fechado','perdido'].includes(String(value))) {
         throw new Error('Etapa inválida.')
       }
-      if (key === 'source' && (typeof value !== 'string' || !leadSources.includes(value as (typeof leadSources)[number]))) {
+      if (key === 'source' && (typeof value !== 'string' || (!settings.leadSources.includes(value) && value !== currentSource))) {
         throw new Error('Selecione uma origem de lead válida.')
       }
       if (key === 'estimatedValue' && value !== null && (
@@ -325,7 +343,7 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
         throw new Error('Informe uma data válida no formato dia/mês/ano.')
       }
       if (key === 'lossReason' && value !== null && (
-        typeof value !== 'string' || !lossReasons.includes(value)
+        typeof value !== 'string' || (!settings.lossReasons.includes(value) && value !== currentLossReason)
       )) {
         throw new Error('Selecione um motivo de perda válido.')
       }
@@ -603,7 +621,11 @@ export const persistQuote = createServerFn({ method: 'POST' })
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
     const db = getPool()
-    const [siteResult, productResult, opportunityResult] = await Promise.all([
+    const settings = await loadSettingsSnapshot(true)
+    if (!settings.settingsReady) {
+      throw new Error('As configurações comerciais ainda não foram carregadas do banco. Não é possível emitir um orçamento oficial.')
+    }
+    const [siteResult, opportunityResult] = await Promise.all([
       db.query(
         `SELECT o.id
          FROM public.obras o
@@ -614,7 +636,6 @@ export const persistQuote = createServerFn({ method: 'POST' })
          LIMIT 1`,
         [data.siteId,data.clientId],
       ),
-      db.query('SELECT * FROM public.produtos WHERE ativo = true'),
       data.opportunityId
         ? db.query(
             `SELECT id FROM public.oportunidades
@@ -631,7 +652,7 @@ export const persistQuote = createServerFn({ method: 'POST' })
       throw new Error('A oportunidade vinculada não pertence ao cliente selecionado ou está inativa.')
     }
 
-    const dbCatalog = productResult.rows.map(mapCatalog)
+    const dbCatalog = settings.catalog.filter((product) => product.active)
     const validProducts = new Map(dbCatalog.map((product) => [product.id, product]))
     const lines = data.lines.map((line) => {
       if (line.catalogId) {
@@ -642,9 +663,20 @@ export const persistQuote = createServerFn({ method: 'POST' })
       return line
     })
 
+    const allowedPaymentMethodIds = new Set(
+      settings.paymentMethods.filter((method) => method.enabledOfficial === true).map((method) => method.id),
+    )
+    const selectedPaymentIds = new Set(data.paymentMethodIds)
+    if (selectedPaymentIds.size !== data.paymentMethodIds.length) {
+      throw new Error('Remova formas de pagamento duplicadas do orçamento.')
+    }
+    if (data.paymentMethodIds.some((id) => !allowedPaymentMethodIds.has(id))) {
+      throw new Error('Uma ou mais formas de pagamento não estão aceitas nas configurações comerciais atuais.')
+    }
+
     const volume = summarizeMeasures(data.volumeElements, data.volumeMargin, 'volume')
     const area = summarizeMeasures(data.areaElements, data.areaMargin, 'area')
-    const ctx = quoteContext(false, { ...createDefaultSettings(), catalog: dbCatalog })
+    const ctx = quoteContext(false, { ...settings, catalog: dbCatalog })
     const result = computeQuote({
       clientId: data.clientId, siteId: data.siteId, lines, volume, area,
       extras: data.extras, paymentMethodIds: data.paymentMethodIds,
