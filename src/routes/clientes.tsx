@@ -172,6 +172,7 @@ const emptyForm = {
 
 function ClientForm({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
   const { clients, addClient, toast, team, currentUserId, settings } = useStore()
+  const { clientTypes, leadSources, regions } = settings
   const [f, setF] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tried, setTried] = useState(false)
@@ -187,9 +188,9 @@ function ClientForm({ open, onClose, onCreated }: { open: boolean; onClose: () =
     ...f,
     whatsapp: f.sameWa ? f.phone : f.whatsapp,
   }, {
-    clientTypes: settings.clientTypes,
-    regions: settings.regions,
-    leadSources: settings.leadSources,
+    clientTypes,
+    regions,
+    leadSources,
   }, clients)
   const liveErrors = tried ? validate() : errors
 
