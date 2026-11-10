@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { AppSettings, PaymentMethod, FunnelStageSetting } from '../data/settings'
-import { createDefaultSettings, funnelStages, normalizeSettings, validateSettings } from '../data/settings'
+import { createDefaultSettings, funnelStages } from '../data/settings'
+import { normalizeSettings, validateSettings } from '../data/settings-validation'
 import type { CatalogItem, CommercialRules } from './quote'
 import { assertSameOrigin, requireAdmin, requireCurrentProfile } from './auth.server'
 import { getPool } from './db.server'
