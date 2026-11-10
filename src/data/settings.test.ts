@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createDefaultSettings, normalizeSettings, pendingSettings, validateSettings } from './settings'
+import { createDefaultSettings, normalizeSettings, validateSettings } from './settings'
+import { pendingSettings } from '../lib/settings-summary'
 
 describe('app settings', () => {
   it('creates an independent copy of default settings', () => {
