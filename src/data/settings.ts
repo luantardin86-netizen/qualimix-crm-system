@@ -290,21 +290,66 @@ function hasDuplicates(values: string[]): boolean {
   return new Set(normalized).size !== normalized.length
 }
 
+function hasEmptyValues(values: string[]): boolean {
+  return values.some((value) => !value.trim())
+}
+
 export function validateSettings(value: AppSettings): AppSettings {
   const next = normalizeSettings(value)
   if (!next.company.tradeName.trim()) throw new Error('Informe o nome comercial da empresa.')
   if (next.catalog.some((item) => !item.id.trim() || !item.code.trim() || !item.name.trim())) throw new Error('Cada produto precisa ter código e nome.')
   if (hasDuplicates(next.catalog.map((item) => item.code))) throw new Error('Existem códigos repetidos no catálogo.')
   if (next.paymentMethods.some((method) => !method.id.trim() || !method.label.trim())) throw new Error('Cada forma de pagamento precisa ter um nome.')
-  if (hasDuplicates(next.leadSources) || hasDuplicates(next.regions) || hasDuplicates(next.lossReasons) || hasDuplicates(next.clientTypes) || hasDuplicates(next.elementTypes)) {
-    throw new Error('Remova os nomes repetidos das listas de apoio antes de confirmar.')
+
+  const supportLists: [string, string[]][] = [
+    ['origens de lead', next.leadSources],
+    ['regiões', next.regions],
+    ['motivos de perda', next.lossReasons],
+    ['tipos de cliente', next.clientTypes],
+    ['tipos de elemento', next.elementTypes],
+  ]
+  for (const [label, values] of supportLists) {
+    if (values.length === 0 || hasEmptyValues(values)) {
+      throw new Error('A lista de ' + label + ' não pode conter itens vazios nem ficar sem opções.')
+    }
+    if (hasDuplicates(values)) {
+      throw new Error('Remova os nomes repetidos da lista de ' + label + '.')
+    }
   }
+  if (next.leadSources[0] !== 'Não informado' || next.leadSources.filter((source) => source === 'Não informado').length !== 1) {
+    throw new Error('"Não informado" deve permanecer como a primeira origem de lead e não pode ser removido ou duplicado.')
+  }
+  if (next.officialRules.freight.regions.length !== next.regions.length ||
+      next.officialRules.freight.regions.some((region, index) => region.name !== next.regions[index])) {
+    throw new Error('As regiões atendidas e os nomes das regras de frete precisam permanecer sincronizados.')
+  }
+  if (next.officialRules.freight.regions.some((region) => !region.id.trim()) ||
+      hasDuplicates(next.officialRules.freight.regions.map((region) => region.id))) {
+    throw new Error('Cada região precisa ter um identificador único para preservar os orçamentos existentes.')
+  }
+  if (next.funnelStages.length !== funnelStages.length ||
+      next.funnelStages.some((stage, index) => stage.id !== funnelStages[index].id || !stage.label.trim())) {
+    throw new Error('As etapas do funil devem manter os IDs fixos e todos os rótulos precisam ser preenchidos.')
+  }
+
   if (!Number.isInteger(next.officialRules.quantityDecimals) || next.officialRules.quantityDecimals < 0 || next.officialRules.quantityDecimals > 4) {
     throw new Error('As casas decimais de quantidade devem estar entre 0 e 4.')
   }
   if (!Number.isInteger(next.demoRules.quantityDecimals) || next.demoRules.quantityDecimals < 0 || next.demoRules.quantityDecimals > 4) {
     throw new Error('As casas decimais de demonstração devem estar entre 0 e 4.')
   }
+  const discountLimit = next.officialRules.maxDiscountPctWithoutApproval
+  if (discountLimit !== null && (discountLimit < 0 || discountLimit > 100)) {
+    throw new Error('O desconto sem aprovação deve estar entre 0% e 100%.')
+  }
+  const validityDays = next.officialRules.validityDays
+  if (validityDays !== null && (!Number.isInteger(validityDays) || validityDays < 1 || validityDays > 365)) {
+    throw new Error('A validade padrão deve ser um número inteiro entre 1 e 365 dias.')
+  }
+  if (typeof next.officialRules.minVolume.chargeDifference !== 'boolean') {
+    throw new Error('A opção de cobrança da diferença do volume mínimo é inválida.')
+  }
+
   const prices = [
     ...next.catalog.flatMap((item) => [item.basePrice, item.demoPrice]),
     next.officialRules.freight.fixed, next.officialRules.freight.perKm,
@@ -317,7 +362,9 @@ export function validateSettings(value: AppSettings): AppSettings {
     ...next.officialRules.freight.regions.map((region) => region.price),
     ...next.demoRules.freight.regions.map((region) => region.price),
   ]
-  if (prices.some((price) => price !== null && (!Number.isFinite(price) || price < 0))) throw new Error('Preços, prazos e limites não podem ser negativos ou inválidos.')
+  if (prices.some((price) => price !== null && (!Number.isFinite(price) || price < 0))) {
+    throw new Error('Preços, prazos e limites não podem ser negativos ou inválidos.')
+  }
   return next
 }
 
