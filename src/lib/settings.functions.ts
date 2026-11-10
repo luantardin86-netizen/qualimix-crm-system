@@ -314,7 +314,7 @@ async function assertRemovedSupportValuesUnused(nextSettings: AppSettings): Prom
            THEN q.dados_orcamento->'volumeElements' ELSE '[]'::jsonb END
        ) AS volume_items(volume_element)
        UNION ALL
-       SELECT volume_element->>'elementType' AS value
+       SELECT area_element->>'elementType' AS value
        FROM public.orcamentos q
        CROSS JOIN LATERAL jsonb_array_elements(
          CASE WHEN jsonb_typeof(q.dados_orcamento->'areaElements') = 'array'
