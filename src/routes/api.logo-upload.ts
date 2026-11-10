@@ -98,7 +98,11 @@ export const Route = createFileRoute('/api/logo-upload')({
             method: 'POST',
             headers: {
               apikey: secretKey,
-              Authorization: 'Bearer ' + secretKey,
+              // As novas chaves sb_secret_ não são JWTs. Só o service_role legado
+              // precisa do Authorization Bearer; com secret key o gateway usa apikey.
+              ...(secretKey.startsWith('sb_secret_')
+                ? {}
+                : { Authorization: 'Bearer ' + secretKey }),
               'Content-Type': image.mimeType,
               'Cache-Control': '31536000',
             },
