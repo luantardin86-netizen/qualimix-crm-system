@@ -55,6 +55,28 @@ describe('CRM field validation', () => {
     expect(errors.source).toBeTruthy()
   })
 
+  it('validates against the lists supplied by the database, not seed values', () => {
+    const databaseLists = {
+      clientTypes: ['Cooperativa'],
+      regions: ['Zona Sul'],
+      leadSources: ['Feira técnica'],
+    }
+    const databaseClient = {
+      ...validClient,
+      type: 'Cooperativa',
+      region: 'Zona Sul',
+      source: 'Feira técnica',
+    }
+    expect(validateClientFields(databaseClient, databaseLists)).toEqual({})
+    expect(validateLeadFields({
+      title: 'Concretagem do galpão',
+      clientId: 'client-db',
+      siteId: '',
+      source: 'Feira técnica',
+      estimatedValue: '',
+    }, databaseLists.leadSources)).toEqual({})
+  })
+
   it('rejects duplicate CPF/CNPJ and validates optional job details', () => {
     const errors = validateClientFields(
       { ...validClient, siteName: 'Residencial Jardim', sitePhone: '9999', siteRestrictions: 'x'.repeat(501) },
