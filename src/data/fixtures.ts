@@ -66,6 +66,7 @@ export interface Site {
   serviceType: string
   accessNotes: string
   restrictions: string
+  active?: boolean
   demo: boolean
 }
 
