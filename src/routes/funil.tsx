@@ -232,7 +232,7 @@ function Funil() {
                     <tr key={o.id} className="border-b border-line last:border-0 hover:bg-surface-2/60">
                       <td className="px-4 py-3">
                         <button onClick={() => setDetail(o.id)} className="text-left font-semibold hover:text-brand">{o.title}</button>
-                        <span className="block text-xs text-muted">{clientName(o.clientId)} · {o.source} · {ownerName(o.ownerId)}</span>
+                        <span className="block text-xs text-muted">{clientName(o.clientId)} · {o.source} · {ownerName(o.ownerId)}{o.archived ? ' · Arquivada' : ''}</span>
                       </td>
                       <td className="px-4 py-3"><Badge tone={o.stage === 'fechado' ? 'ok' : o.stage === 'perdido' ? 'red' : 'neutral'}>{stageLabel(o.stage)}</Badge></td>
                       <td className="px-4 py-3 text-right font-semibold tabular">{o.estimatedValue === null ? '—' : brl(o.estimatedValue)}</td>
@@ -382,7 +382,7 @@ function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly 
             <Badge>{o.estimatedValue === null ? 'Valor a definir' : brl(o.estimatedValue)}</Badge>
             {quoteNumber
               ? <Link to="/orcamentos" search={{ q: quoteNumber }} className="text-xs font-semibold text-brand hover:underline">Ver orçamento {quoteNumber}</Link>
-              : !readOnly && o.stage !== 'perdido' && <Link to="/orcamentos/novo" search={{ oportunidade: o.id }} className="text-xs font-semibold text-brand hover:underline">Criar orçamento vinculado</Link>}
+              : !readOnly && !o.archived && o.stage !== 'perdido' && <Link to="/orcamentos/novo" search={{ oportunidade: o.id }} className="text-xs font-semibold text-brand hover:underline">Criar orçamento vinculado</Link>}
           </div>
         </div>
         {!canEditDetails ? <p className="text-sm text-muted">Etapa atual: <strong>{stageLabel(o.stage)}</strong>{o.archived ? ' · Oportunidade arquivada' : ''}</p> : <Field label="Etapa">
