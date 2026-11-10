@@ -1,7 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { Client, Opportunity, QuoteRecord, Site, TeamUser, QuoteType } from '../data/fixtures'
-import { quoteContext } from '../data/derived'
-import { createDefaultSettings, leadSources, lossReasons } from '../data/settings'
 import {
   computeQuote,
   defaultExtras,
@@ -10,13 +8,15 @@ import {
   type MeasureElement,
   type QuoteExtras,
   type QuoteLine,
+  type QuoteContext,
+  type CommercialRules,
 } from './quote'
 import { assertSameOrigin, requireCurrentProfile, type AuthProfile } from './auth.server'
 import { getPool, withTransaction } from './db.server'
 import { onlyDigits } from './documents'
 import { addDays } from './format'
 import { todayInSaoPaulo } from './clock'
-import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateLeadFields, validateOptionalDecimal } from './crm-validation'
+import { isValidIsoDate, normalizeBrazilPhone, parseOptionalAmount, validateClientFields, validateLeadFields, validateOptionalDecimal, type CrmValidationLists } from './crm-validation'
 
 const isoDate = (value: unknown): string => {
   if (value instanceof Date) return value.toISOString().slice(0, 10)
@@ -82,6 +82,39 @@ function assertCommercial(profile: AuthProfile) {
   if (profile.perfil !== 'admin' && profile.role !== 'comercial') {
     throw new Error('Seu perfil não tem permissão para alterar dados comerciais.')
   }
+}
+
+function parseSettingsArray(value: unknown): string[] {
+  let parsed = value
+  if (typeof parsed === 'string') {
+    try { parsed = JSON.parse(parsed) as unknown } catch { parsed = [] }
+  }
+  return Array.isArray(parsed)
+    ? parsed.filter((item): item is string => typeof item === 'string').map((item) => item.trim()).filter(Boolean)
+    : []
+}
+
+async function loadCrmValidationLists(db: ReturnType<typeof getPool>): Promise<CrmValidationLists & { lossReasons: string[] }> {
+  const result = await db.query<{
+    tipos_cliente: unknown
+    origens_lead: unknown
+    regioes: unknown
+    motivos_perda: unknown
+  }>(
+    "SELECT tipos_cliente, origens_lead, regioes, motivos_perda FROM public.configuracoes WHERE id = 'default' LIMIT 1",
+  )
+  const row = result.rows[0]
+  if (!row) throw new Error('As listas de apoio não foram carregadas do banco. Verifique as configurações do CRM.')
+  const lists = {
+    clientTypes: parseSettingsArray(row.tipos_cliente),
+    leadSources: parseSettingsArray(row.origens_lead),
+    regions: parseSettingsArray(row.regioes),
+    lossReasons: parseSettingsArray(row.motivos_perda),
+  }
+  if (!lists.clientTypes.length || !lists.leadSources.length || !lists.regions.length || !lists.lossReasons.length) {
+    throw new Error('Uma ou mais listas de apoio estão vazias no banco. Corrija as configurações antes de continuar.')
+  }
+  return lists
 }
 
 export type CrmViews = {
@@ -181,18 +214,6 @@ export const persistClient = createServerFn({ method: 'POST' })
       }
     }
 
-    const errors = validateClientFields({
-      ...rawClient,
-      siteName: rawSite?.name,
-      siteAddress: rawSite?.address,
-      siteContact: rawSite?.contactName,
-      sitePhone: rawSite?.contactPhone,
-      siteRestrictions: rawSite?.restrictions,
-    })
-    if (Object.keys(errors).length) {
-      throw new Error(Object.values(errors).join(' '))
-    }
-
     const readText = (value: unknown, label: string, max: number): string => {
       if (value == null) return ''
       if (typeof value !== 'string') throw new Error(`Campo inválido: ${label}.`)
@@ -242,6 +263,16 @@ export const persistClient = createServerFn({ method: 'POST' })
     if (profile.perfil !== 'admin') {
       throw new Error('Somente administradores podem cadastrar novos clientes.')
     }
+    const lists = await loadCrmValidationLists(getPool())
+    const errors = validateClientFields({
+      ...data.client,
+      siteName: data.site?.name,
+      siteAddress: data.site?.address,
+      siteContact: data.site?.contactName,
+      sitePhone: data.site?.contactPhone,
+      siteRestrictions: data.site?.restrictions,
+    }, [], lists)
+    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
     const c = data.client
     try {
       await withTransaction(async (tx) => {
@@ -291,6 +322,16 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
     assertSameOrigin()
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
+    const db = getPool()
+    const [lists, currentOpportunity] = await Promise.all([
+      loadCrmValidationLists(db),
+      db.query<{ origem: string; motivo_perda: string | null }>(
+        'SELECT origem, motivo_perda FROM public.oportunidades WHERE id = $1 LIMIT 1',
+        [data.id],
+      ),
+    ])
+    const previous = currentOpportunity.rows[0]
+    if (!previous) throw new Error('Oportunidade não encontrada.')
     const allowed: Record<string, string> = {
       title: 'titulo', clientId: 'cliente_id', siteId: 'obra_id', stage: 'etapa',
       estimatedValue: 'valor_estimado', source: 'origem', lastContact: 'ultimo_contato',
@@ -304,11 +345,16 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
       if (key === 'title' && (typeof value !== 'string' || value.trim().length < 3 || value.trim().length > 180)) {
         throw new Error('O título deve ter entre 3 e 180 caracteres.')
       }
+      if (key === 'source' && (typeof value !== 'string' || (!lists.leadSources.includes(value) && value !== previous.origem))) {
+        throw new Error('Selecione uma origem de lead válida.')
+      }
+      if (key === 'lossReason' && value !== null && (
+        typeof value !== 'string' || (!lists.lossReasons.includes(value) && value !== previous.motivo_perda)
+      )) {
+        throw new Error('Selecione um motivo de perda válido.')
+      }
       if (key === 'stage' && !['novo','atendimento','levantamento','elaboracao','enviado','negociacao','fechado','perdido'].includes(String(value))) {
         throw new Error('Etapa inválida.')
-      }
-      if (key === 'source' && (typeof value !== 'string' || !leadSources.includes(value as (typeof leadSources)[number]))) {
-        throw new Error('Selecione uma origem de lead válida.')
       }
       if (key === 'estimatedValue' && value !== null && (
         typeof value !== 'number' || !Number.isFinite(value) || value < 0 ||
@@ -323,11 +369,6 @@ export const persistOpportunity = createServerFn({ method: 'POST' })
         typeof value !== 'string' || !isValidIsoDate(value)
       )) {
         throw new Error('Informe uma data válida no formato dia/mês/ano.')
-      }
-      if (key === 'lossReason' && value !== null && (
-        typeof value !== 'string' || !lossReasons.includes(value)
-      )) {
-        throw new Error('Selecione um motivo de perda válido.')
       }
       if (key === 'clientId' && (typeof value !== 'string' || !value || value.length > 80)) {
         throw new Error('Cliente inválido.')
@@ -374,14 +415,14 @@ export const createOpportunity = createServerFn({ method: 'POST' })
   .validator((input: unknown): OpportunityCreateInput => {
     if (!input || typeof input !== 'object') throw new Error('Dados da oportunidade inválidos.')
     const data = input as Record<string, unknown>
-    const errors = validateLeadFields({
+    const shapeErrors = validateLeadFields({
       title: data.title,
       clientId: data.clientId,
       siteId: data.siteId,
       source: data.source,
       estimatedValue: data.estimatedValue == null ? '' : String(data.estimatedValue),
     })
-    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
+    if (Object.keys(shapeErrors).length) throw new Error(Object.values(shapeErrors).join(' '))
     const estimatedValue = data.estimatedValue == null || data.estimatedValue === ''
       ? null
       : parseOptionalAmount(String(data.estimatedValue))
@@ -398,6 +439,15 @@ export const createOpportunity = createServerFn({ method: 'POST' })
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
     const db = getPool()
+    const lists = await loadCrmValidationLists(db)
+    const errors = validateLeadFields({
+      title: data.title,
+      clientId: data.clientId,
+      siteId: data.siteId,
+      source: data.source,
+      estimatedValue: data.estimatedValue == null ? '' : String(data.estimatedValue),
+    }, lists)
+    if (Object.keys(errors).length) throw new Error(Object.values(errors).join(' '))
     const clientResult = await db.query(
       'SELECT id FROM public.clientes WHERE id = $1 AND ativo = true AND is_demo = false LIMIT 1',
       [data.clientId],
@@ -603,7 +653,7 @@ export const persistQuote = createServerFn({ method: 'POST' })
     const profile = await requireCurrentProfile()
     assertCommercial(profile)
     const db = getPool()
-    const [siteResult, productResult, opportunityResult] = await Promise.all([
+    const [siteResult, productResult, opportunityResult, configResult] = await Promise.all([
       db.query(
         `SELECT o.id
          FROM public.obras o
@@ -625,6 +675,9 @@ export const persistQuote = createServerFn({ method: 'POST' })
             [data.opportunityId, data.clientId, data.siteId],
           )
         : Promise.resolve({ rows: [] }),
+      db.query<{ regras_oficiais: unknown; formas_pagamento: unknown }>(
+        "SELECT regras_oficiais, formas_pagamento FROM public.configuracoes WHERE id = 'default' LIMIT 1",
+      ),
     ])
     if (!siteResult.rows.length) throw new Error('A obra não pertence ao cliente selecionado ou está inativa.')
     if (data.opportunityId && !opportunityResult.rows.length) {
@@ -642,9 +695,47 @@ export const persistQuote = createServerFn({ method: 'POST' })
       return line
     })
 
+    const config = configResult.rows[0]
+    if (!config) throw new Error('As configurações comerciais não foram encontradas no banco. Não é possível salvar o orçamento com regras padrão.')
+    const parseConfigJson = (value: unknown): unknown => {
+      if (typeof value !== 'string') return value
+      try { return JSON.parse(value) as unknown } catch { return null }
+    }
+    const rawPaymentMethods = parseConfigJson(config.formas_pagamento)
+    const paymentMethods = Array.isArray(rawPaymentMethods)
+      ? rawPaymentMethods.flatMap((item) => {
+          if (!item || typeof item !== 'object' || Array.isArray(item)) return []
+          const method = item as Record<string, unknown>
+          if (typeof method.id !== 'string' || typeof method.label !== 'string') return []
+          const enabled = method.enabled_official ?? method.enabledOfficial
+          return [{
+            id: method.id,
+            label: method.label,
+            enabledOfficial: typeof enabled === 'boolean' ? enabled : null,
+            enabledDemo: false,
+          }]
+        })
+      : []
+    const enabledPaymentMethodIds = paymentMethods
+      .filter((method) => method.enabledOfficial === true)
+      .map((method) => method.id)
+    const rejectedPaymentMethod = data.paymentMethodIds.find((id) => !enabledPaymentMethodIds.includes(id))
+    if (rejectedPaymentMethod) {
+      const method = paymentMethods.find((item) => item.id === rejectedPaymentMethod)
+      throw new Error(`A forma de pagamento ${method?.label ?? rejectedPaymentMethod} não está aceita nas configurações comerciais.`)
+    }
+    const rawRules = parseConfigJson(config.regras_oficiais)
+    if (!rawRules || typeof rawRules !== 'object' || Array.isArray(rawRules)) {
+      throw new Error('As regras comerciais oficiais não estão configuradas corretamente no banco.')
+    }
+    const ctx: QuoteContext = {
+      catalog: dbCatalog,
+      rules: rawRules as CommercialRules,
+      demoPrices: false,
+      enabledPaymentMethodIds,
+    }
     const volume = summarizeMeasures(data.volumeElements, data.volumeMargin, 'volume')
     const area = summarizeMeasures(data.areaElements, data.areaMargin, 'area')
-    const ctx = quoteContext(false, { ...createDefaultSettings(), catalog: dbCatalog })
     const result = computeQuote({
       clientId: data.clientId, siteId: data.siteId, lines, volume, area,
       extras: data.extras, paymentMethodIds: data.paymentMethodIds,
