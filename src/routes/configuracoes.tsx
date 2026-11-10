@@ -92,9 +92,9 @@ function CompanySettingsEditor({
   const [logoLocalPreview, setLogoLocalPreview] = useState<string | null>(null)
   const [logoPreviewFailed, setLogoPreviewFailed] = useState(false)
   const dirty = JSON.stringify(draft) !== JSON.stringify(savedDraft)
-  const logoPreviewSrc = logoLocalPreview ?? (
-    draft.logoUrl.trim() && !logoPreviewFailed ? draft.logoUrl.trim() : null
-  )
+  const logoPreviewSrc = logoPreviewFailed
+    ? null
+    : logoLocalPreview ?? (draft.logoUrl.trim() || null)
 
   useEffect(() => {
     if (!dirty) {
@@ -125,7 +125,6 @@ function CompanySettingsEditor({
       : null,
   }
   const hasErrors = Object.values(errors).some(Boolean)
-  const logoUrlIsPreviewable = draft.logoUrl.trim() && !errors.logoUrl && !logoPreviewFailed
 
   const update = <K extends keyof CompanyDraft>(key: K, value: CompanyDraft[K]) => {
     setDraft((current) => ({ ...current, [key]: value }))
