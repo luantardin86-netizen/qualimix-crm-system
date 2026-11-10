@@ -235,6 +235,110 @@ export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): 
   }
 })
 
+type SupportSettingsSnapshot = {
+  origens_lead: unknown
+  regioes: unknown
+  motivos_perda: unknown
+  tipos_cliente: unknown
+  tipos_elemento: unknown
+  regras_oficiais: unknown
+}
+
+function removedValues(previous: string[], next: string[]): string[] {
+  const nextValues = new Set(next.map((value) => value.trim().toLocaleLowerCase('pt-BR')))
+  return previous.filter((value) => !nextValues.has(value.trim().toLocaleLowerCase('pt-BR')))
+}
+
+async function assertRemovedSupportValuesUnused(nextSettings: AppSettings): Promise<void> {
+  const current = await getPool().query<SupportSettingsSnapshot>(
+    `SELECT origens_lead, regioes, motivos_perda, tipos_cliente, tipos_elemento, regras_oficiais
+     FROM public.configuracoes WHERE id = 'default' LIMIT 1`,
+  )
+  const previous = current.rows[0]
+  if (!previous) throw new Error('As configurações principais não foram encontradas.')
+
+  const removedLeadSources = removedValues(array(previous.origens_lead).filter((x): x is string => typeof x === 'string'), nextSettings.leadSources)
+  const removedRegions = removedValues(array(previous.regioes).filter((x): x is string => typeof x === 'string'), nextSettings.regions)
+  const removedLossReasons = removedValues(array(previous.motivos_perda).filter((x): x is string => typeof x === 'string'), nextSettings.lossReasons)
+  const removedClientTypes = removedValues(array(previous.tipos_cliente).filter((x): x is string => typeof x === 'string'), nextSettings.clientTypes)
+  const removedElementTypes = removedValues(array(previous.tipos_elemento).filter((x): x is string => typeof x === 'string'), nextSettings.elementTypes)
+
+  const previousRules = record(previous.regras_oficiais)
+  const previousFreight = record(previousRules.freight)
+  const previousFreightRegions = Array.isArray(previousFreight.regions)
+    ? previousFreight.regions.map((item) => record(item))
+    : []
+  const nextRegionIds = new Set(nextSettings.officialRules.freight.regions.map((region) => region.id))
+  const removedRegionIds = previousFreightRegions
+    .filter((region) => typeof region.id === 'string' && !nextRegionIds.has(region.id))
+    .map((region) => String(region.id))
+
+  const pool = getPool()
+  const checks: Promise<{ rows: { source: string; value: string }[] }>[] = []
+  if (removedLeadSources.length) checks.push(pool.query<{ source: string; value: string }>(
+    `SELECT source, value FROM (
+       SELECT 'clientes'::text AS source, origem AS value FROM public.clientes WHERE origem = ANY($1::text[])
+       UNION ALL
+       SELECT 'oportunidades'::text AS source, origem AS value FROM public.oportunidades WHERE origem = ANY($1::text[])
+     ) AS used LIMIT 1`,
+    [removedLeadSources],
+  ))
+  if (removedRegions.length || removedRegionIds.length) checks.push(pool.query<{ source: string; value: string }>(
+    `SELECT source, value FROM (
+       SELECT 'clientes'::text AS source, regiao AS value FROM public.clientes WHERE regiao = ANY($1::text[])
+       UNION ALL
+       SELECT 'obras'::text AS source, regiao AS value FROM public.obras WHERE regiao = ANY($1::text[])
+       UNION ALL
+       SELECT 'orçamentos'::text AS source, dados_orcamento #>> '{extras,freight,regionId}' AS value
+       FROM public.orcamentos
+       WHERE dados_orcamento #>> '{extras,freight,regionId}' = ANY($2::text[])
+     ) AS used LIMIT 1`,
+    [removedRegions, removedRegionIds],
+  ))
+  if (removedLossReasons.length) checks.push(pool.query<{ source: string; value: string }>(
+    `SELECT 'oportunidades'::text AS source, motivo_perda AS value
+     FROM public.oportunidades WHERE motivo_perda = ANY($1::text[]) LIMIT 1`,
+    [removedLossReasons],
+  ))
+  if (removedClientTypes.length) checks.push(pool.query<{ source: string; value: string }>(
+    `SELECT 'clientes'::text AS source, tipo AS value
+     FROM public.clientes WHERE tipo = ANY($1::text[]) LIMIT 1`,
+    [removedClientTypes],
+  ))
+  if (removedElementTypes.length) checks.push(pool.query<{ source: string; value: string }>(
+    `SELECT 'orçamentos'::text AS source, used.value FROM (
+       SELECT element->>'elementType' AS value
+       FROM public.orcamentos q
+       CROSS JOIN LATERAL jsonb_array_elements(
+         CASE WHEN jsonb_typeof(q.dados_orcamento->'volumeElements') = 'array'
+           THEN q.dados_orcamento->'volumeElements' ELSE '[]'::jsonb END
+       ) AS element
+       UNION ALL
+       SELECT element->>'elementType' AS value
+       FROM public.orcamentos q
+       CROSS JOIN LATERAL jsonb_array_elements(
+         CASE WHEN jsonb_typeof(q.dados_orcamento->'areaElements') = 'array'
+           THEN q.dados_orcamento->'areaElements' ELSE '[]'::jsonb END
+       ) AS element
+     ) AS used WHERE used.value = ANY($1::text[]) LIMIT 1`,
+    [removedElementTypes],
+  ))
+
+  const results = await Promise.all(checks)
+  const used = results.flatMap((result) => result.rows)[0]
+  if (used) {
+    const sourceLabels: Record<string, string> = {
+      clientes: 'clientes',
+      obras: 'obras',
+      oportunidades: 'oportunidades',
+      orçamentos: 'orçamentos salvos',
+    }
+    throw new Error(
+      `Não é possível remover ou renomear "${used.value}" porque essa opção já está sendo usada em ${sourceLabels[used.source] ?? used.source}. Preserve o item para manter o histórico consistente.`,
+    )
+  }
+}
+
 export const saveSettings = createServerFn({ method: 'POST' })
   .validator((input: unknown) => {
     if (!input || typeof input !== 'object' || Array.isArray(input)) {
@@ -272,6 +376,7 @@ export const saveSettings = createServerFn({ method: 'POST' })
     assertSameOrigin()
     const profile = requireAdmin(await requireCurrentProfile())
     const settings = data.settings
+    await assertRemovedSupportValuesUnused(settings)
     const stageLabels = Object.fromEntries(settings.funnelStages.map((stage) => [stage.id, stage.label]))
     const paymentMethods = settings.paymentMethods.map((method) => ({
       id: method.id,
