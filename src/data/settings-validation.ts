@@ -1,5 +1,16 @@
-import { createDefaultSettings, type AppSettings } from './settings'
+import { createDefaultSettings, type AppSettings, type CompanySettings, type PaymentMethod } from './settings'
 import type { CatalogItem, CommercialRules } from '../lib/quote'
+
+function copyRules(rules: CommercialRules): CommercialRules {
+  return {
+    ...rules,
+    freight: { ...rules.freight, regions: rules.freight.regions.map((region) => ({ ...region })) },
+    pumping: { ...rules.pumping },
+    minVolume: { ...rules.minVolume },
+    stay: { ...rules.stay },
+    floor: { ...rules.floor },
+  }
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
