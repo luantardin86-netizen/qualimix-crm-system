@@ -167,9 +167,11 @@ type ManagedSiteRecord = {
 export const loadManagedSites = createServerFn({ method: 'GET' }).handler(async (): Promise<ManagedSiteRecord[]> => {
   await requireCurrentProfile()
   const result = await getPool().query<ManagedSiteRecord>(
-    `select o.id, o.cliente_id, c.nome as cliente_nome, o.nome, o.endereco, o.cidade, o.regiao,
-            o.contato_nome, o.contato_telefone, o.tipo_servico, o.observacoes_acesso,
-            o.restricoes, o.ativa
+    `select o.id, o.cliente_id, c.nome as cliente_nome, o.nome, o.endereco,
+            coalesce(o.cidade,'') as cidade, coalesce(o.regiao,'') as regiao,
+            coalesce(o.contato_nome,'') as contato_nome, coalesce(o.contato_telefone,'') as contato_telefone,
+            coalesce(o.tipo_servico,'') as tipo_servico, coalesce(o.observacoes_acesso,'') as observacoes_acesso,
+            coalesce(o.restricoes,'') as restricoes, o.ativa
        from public.obras o
        join public.clientes c on c.id = o.cliente_id
       where o.is_demo = false and c.is_demo = false
