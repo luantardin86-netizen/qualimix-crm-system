@@ -49,7 +49,8 @@ function mapWorkOrder(r: any): WorkOrder {
     opportunityId: r.oportunidade_id == null ? null : String(r.oportunidade_id),
     clientId: String(r.cliente_id), siteId: String(r.obra_id), description: String(r.descricao),
     contractedCents: Number(r.valor_contratado_centavos), status: r.status,
-    createdAt: isoDateTime(r.created_at),
+    createdAt: isoDateTime(r.created_at), cancellationReason: r.motivo_cancelamento ?? null,
+    cancelledAt: r.cancelado_em ? isoDateTime(r.cancelado_em) : null,
     valueHistory: Array.isArray(r.historico_valor) ? r.historico_valor : [],
     demo: false,
   }
@@ -306,6 +307,9 @@ export const cancelWorkOrderOnServer = createServerFn({ method: 'POST' })
       const order = orderResult.rows[0]
       if (!order || order.is_demo) throw new Error('Pedido não encontrado.')
       if (order.status === 'Cancelada') return
+      if (order.status === 'Em execução' || order.status === 'Concluída') {
+        throw new Error('Um pedido em execução ou concluído não pode ser cancelado por esta rotina.')
+      }
 
       const schedule = await tx.query<{ status: string }>(
         'select status from public.agenda_eventos where pedido_id=$1 for update',
