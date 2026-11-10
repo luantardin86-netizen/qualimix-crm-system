@@ -285,6 +285,73 @@ export const updateWorkOrderAmountOnServer = createServerFn({ method: 'POST' })
     })
   })
 
+export const cancelWorkOrderOnServer = createServerFn({ method: 'POST' })
+  .validator((input: unknown) => {
+    if (!input || typeof input !== 'object') throw new Error('Pedido inválido.')
+    const x = input as Record<string, unknown>
+    const id = idText(x.id, 'Pedido')
+    const reason = text(x.reason, 'Motivo do cancelamento', 500, true)
+    if (reason.length < 5) throw new Error('Descreva o motivo do cancelamento com ao menos 5 caracteres.')
+    return { id, reason }
+  })
+  .handler(async ({ data }) => {
+    assertSameOrigin()
+    const profile = await requireCurrentProfile()
+    assertRole(profile, ['comercial'])
+    await withTransaction(async (tx) => {
+      const orderResult = await tx.query<any>(
+        'select id,status,is_demo from public.pedidos where id=$1 for update',
+        [data.id],
+      )
+      const order = orderResult.rows[0]
+      if (!order || order.is_demo) throw new Error('Pedido não encontrado.')
+      if (order.status === 'Cancelada') return
+
+      const schedule = await tx.query<{ status: string }>(
+        'select status from public.agenda_eventos where pedido_id=$1 for update',
+        [data.id],
+      )
+      if (schedule.rows.some((row) => row.status === 'Em execução' || row.status === 'Concluída')) {
+        throw new Error('Este pedido possui serviço em execução ou concluído. Faça a conferência operacional antes de cancelar.')
+      }
+
+      const receivables = await tx.query<any>(
+        "select id,valor_centavos from public.lancamentos_financeiros where pedido_id=$1 and tipo='receber' and cancelado_em is null for update",
+        [data.id],
+      )
+      for (const entry of receivables.rows) {
+        const paid = await tx.query<{ total: string | number }>(
+          'select coalesce(sum(valor_centavos),0)::bigint as total from public.pagamentos_financeiros where lancamento_id=$1',
+          [entry.id],
+        )
+        if (Number(paid.rows[0]?.total ?? 0) > 0) {
+          throw new Error('O pedido já possui recebimentos registrados. Não é seguro cancelá-lo automaticamente; regularize o financeiro antes.')
+        }
+      }
+
+      for (const entry of receivables.rows) {
+        await tx.query(
+          `update public.lancamentos_financeiros
+              set cancelado_em=now(),cancelado_por=$2,status='Cancelado'
+            where id=$1`,
+          [entry.id,profile.id],
+        )
+      }
+
+      await tx.query(
+        "update public.agenda_eventos set status='Cancelada' where pedido_id=$1 and status not in ('Cancelada','Concluída')",
+        [data.id],
+      )
+      await tx.query(
+        `update public.pedidos
+            set status='Cancelada',cancelado_em=now(),cancelado_por=$2,motivo_cancelamento=$3
+          where id=$1`,
+        [data.id,profile.id,data.reason],
+      )
+    })
+    return { success: true }
+  })
+
 export type ExpenseInput = JobExpense & { dueDate: string; method: string }
 export const addExpenseOnServer = createServerFn({ method: 'POST' })
   .validator((input: unknown): ExpenseInput => {
