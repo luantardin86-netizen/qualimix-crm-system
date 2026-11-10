@@ -525,9 +525,9 @@ export const saveScheduleEventOnServer = createServerFn({ method: 'POST' })
     assertRole(profile, ['operacao'])
     await withTransaction(async (tx) => {
       const order=await tx.query<any>(
-        'select orcamento_id,cliente_id,obra_id,is_demo from public.pedidos where id=$1 for share',[data.workOrderId])
+        'select orcamento_id,cliente_id,obra_id,is_demo,status from public.pedidos where id=$1 for share',[data.workOrderId])
       const row=order.rows[0]
-      if (!row || row.is_demo || row.orcamento_id!==data.quoteId || row.cliente_id!==data.clientId || row.obra_id!==data.siteId) {
+      if (!row || row.is_demo || row.status === 'Cancelada' || row.orcamento_id!==data.quoteId || row.cliente_id!==data.clientId || row.obra_id!==data.siteId) {
         throw new Error('O pedido não corresponde ao orçamento, cliente e obra selecionados.')
       }
       await tx.query(
@@ -563,8 +563,8 @@ export const saveTaskOnServer = createServerFn({ method: 'POST' })
     assertRole(profile,roles.commercial)
     await withTransaction(async (tx) => {
       if (data.opportunityId) {
-        const opportunity=await tx.query('select id from public.oportunidades where id=$1 and is_demo=false',[data.opportunityId])
-        if (!opportunity.rowCount) throw new Error('A oportunidade vinculada não existe ou é de demonstração.')
+        const opportunity=await tx.query('select id from public.oportunidades where id=$1 and is_demo=false and arquivada=false',[data.opportunityId])
+        if (!opportunity.rowCount) throw new Error('A oportunidade vinculada não existe, está arquivada ou é de demonstração.')
       }
       await tx.query(
         `insert into public.tarefas_comerciais
