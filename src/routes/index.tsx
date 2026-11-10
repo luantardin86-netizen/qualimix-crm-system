@@ -4,7 +4,7 @@ import { CalendarDays, CircleAlert, FileText, Plus, Settings, Truck, Wallet } fr
 import { useStore } from '../data/store'
 import { computeDashboard, computeOperationalDashboard } from '../data/metrics'
 import { todayInSaoPaulo } from '../lib/clock'
-import { pendingSettings } from '../data/settings'
+import { pendingSettings } from '../lib/settings-summary'
 import { brl, brlCents, dateBR, daysBetween, num, pct } from '../lib/format'
 import { Badge, Card, CardHeader, EmptyState, PageHeader, cx, inputCls } from '../components/ui'
 import { BarChart, ChartCard } from '../components/Charts'

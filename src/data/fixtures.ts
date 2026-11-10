@@ -13,7 +13,8 @@ import {
   type QuoteExtras,
   type QuoteLine,
 } from '../lib/quote'
-import { catalog, type QuoteStatus, type StageId } from './settings'
+import { catalog, type StageId } from './settings'
+import type { QuoteStatus } from './labels'
 
 export const today = isoDate(new Date())
 const rel = (n: number) => addDays(today, n)

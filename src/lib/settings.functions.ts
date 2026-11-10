@@ -1,6 +1,7 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { AppSettings, PaymentMethod, FunnelStageSetting } from '../data/settings'
-import { createDefaultSettings, funnelStages, normalizeSettings, validateSettings } from '../data/settings'
+import { createDefaultSettings, funnelStages } from '../data/settings'
+import { normalizeSettings, validateSettings } from '../data/settings-validation'
 import type { CatalogItem, CommercialRules } from './quote'
 import { assertSameOrigin, requireAdmin, requireCurrentProfile } from './auth.server'
 import { getPool } from './db.server'
@@ -207,15 +208,12 @@ async function loadProductRows(canViewSales: boolean): Promise<ProductRow[]> {
 }
 
 /**
- * Carrega as configurações persistidas e o catálogo completo.
- * Antes da migration/seed existir, mantém defaults explícitos e settingsReady=false.
+ * Snapshot server-side das configurações persistidas e do catálogo.
+ * Se a configuração principal não existir, retorna defaults com settingsReady=false.
+ * Reutilizado por operações autenticadas do CRM para validar e calcular no servidor.
  */
-export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): Promise<LoadedSettings> => {
-  const profile = await requireCurrentProfile()
-  const isAdmin = profile.perfil === 'admin' || profile.role === 'administrador'
-  const canViewSales = isAdmin || profile.role === 'comercial' || profile.role === 'consulta'
+export async function loadSettingsSnapshot(canViewSales: boolean): Promise<LoadedSettings> {
   const products = await loadProductRows(canViewSales)
-
   try {
     const result = await getPool().query<{ config: Record<string, unknown>; updated_at: string }>(
       'SELECT CASE WHEN $1 THEN to_jsonb(c) ELSE to_jsonb(c) - \'regras_oficiais\' END AS config, ' +
@@ -233,6 +231,13 @@ export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): 
     if ((error as { code?: string })?.code !== '42P01') throw error
     return buildLoadedSettings(null, products, canViewSales)
   }
+}
+
+export const loadSettings = createServerFn({ method: 'GET' }).handler(async (): Promise<LoadedSettings> => {
+  const profile = await requireCurrentProfile()
+  const isAdmin = profile.perfil === 'admin' || profile.role === 'administrador'
+  const canViewSales = isAdmin || profile.role === 'comercial' || profile.role === 'consulta'
+  return loadSettingsSnapshot(canViewSales)
 })
 
 export const saveSettings = createServerFn({ method: 'POST' })
@@ -393,11 +398,11 @@ export const getPublicBranding = createServerFn({ method: 'GET' }).handler(async
     )
     const row = result.rows[0]
     return {
-      tradeName: row?.nome_comercial?.trim() || 'Qualimix',
+      tradeName: row?.nome_comercial?.trim() || '',
       logoUrl: row?.logo_url ?? null,
     }
   } catch (error) {
     if ((error as { code?: string })?.code !== '42P01') throw error
-    return { tradeName: 'Qualimix', logoUrl: null }
+    return { tradeName: '', logoUrl: null }
   }
 })

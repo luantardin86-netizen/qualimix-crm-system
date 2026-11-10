@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, createFileRoute } from '@tanstack/react-router'
 import { Bell, Clock, KanbanSquare, List, Plus, SquareKanban, TriangleAlert } from 'lucide-react'
 import { useStore } from '../data/store'
-import { funnelStages, leadSources, lossReasons, type StageId } from '../data/settings'
+import type { StageId } from '../data/settings'
 import { today, type Opportunity } from '../data/fixtures'
 import { brl, dateBR, daysBetween } from '../lib/format'
 import { Badge, Button, Card, Drawer, EmptyState, Field, Modal, PageHeader, SegTabs, cx, inputCls } from '../components/ui'
@@ -15,7 +15,7 @@ export const Route = createFileRoute('/funil')({
 })
 
 const STALE_DAYS = 7
-const stageLabel = (id: StageId) => funnelStages.find((s) => s.id === id)?.label ?? id
+const stageLabel = (id: StageId, stages: readonly { id: StageId; label: string }[]) => stages.find((s) => s.id === id)?.label ?? id
 const isOpen = (o: Opportunity) => o.stage !== 'fechado' && o.stage !== 'perdido'
 
 function followUp(o: Opportunity) {
@@ -27,7 +27,9 @@ function followUp(o: Opportunity) {
 }
 
 function Funil() {
-  const { opportunities, clients, sites, updateOpportunity, createOpportunity, toast, team, currentRole, views, demoMode } = useStore()
+  const { opportunities, clients, sites, updateOpportunity, createOpportunity, toast, team, currentRole, views, demoMode, settings } = useStore()
+  const { funnelStages, leadSources, lossReasons } = settings
+  const labelForStage = (id: StageId) => stageLabel(id, funnelStages)
   const canEdit = currentRole === 'administrador' || currentRole === 'comercial'
   const [view, setView] = useState<'kanban' | 'tabela'>('kanban')
   const [owner, setOwner] = useState('')
@@ -41,15 +43,19 @@ function Funil() {
   const [leadTitle, setLeadTitle] = useState('')
   const [leadClientId, setLeadClientId] = useState('')
   const [leadSiteId, setLeadSiteId] = useState('')
-  const [leadSource, setLeadSource] = useState<string>(leadSources[0])
+  const [leadSource, setLeadSource] = useState<string>('')
   const [leadValue, setLeadValue] = useState('')
   const [leadSaving, setLeadSaving] = useState(false)
   const [leadTried, setLeadTried] = useState(false)
 
+  useEffect(() => {
+    if (!leadSources.includes(leadSource)) setLeadSource(leadSources[0] ?? '')
+  }, [leadSource, leadSources])
+
   const clientName = (id: string) => clients.find((c) => c.id === id)?.name ?? '—'
   const ownerName = (id: string) => team.find((member) => member.id === id)?.name ?? '—'
   const leadSites = sites.filter((site) => site.clientId === leadClientId)
-  const leadErrors = leadTried ? validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue }) : {}
+  const leadErrors = leadTried ? validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue }, leadSources) : {}
 
   const filtered = useMemo(
     () =>
@@ -65,7 +71,7 @@ function Funil() {
 
   const submitLead = async () => {
     setLeadTried(true)
-    const errors = validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue })
+    const errors = validateLeadFields({ title: leadTitle, clientId: leadClientId, siteId: leadSiteId, source: leadSource, estimatedValue: leadValue }, leadSources)
     if (!clients.some((client) => client.id === leadClientId && client.active)) {
       errors.clientId = 'Selecione um cliente ativo.'
     }
@@ -91,7 +97,7 @@ function Funil() {
       setLeadSiteId('')
       setLeadTried(false)
       setLeadValue('')
-      setLeadSource(leadSources[0])
+      setLeadSource(leadSources[0] ?? '')
     } catch (error) {
       toast({ tone: 'erro', title: 'Não foi possível criar o lead', body: error instanceof Error ? error.message : 'Erro inesperado.' })
     } finally {
@@ -103,8 +109,8 @@ function Funil() {
     if (to === o.stage) return
     if (to === 'perdido') return setLosing({ id: o.id, reason: '', note: '' })
     if (to === 'fechado') return setClosing(o.id)
-    updateOpportunity(o.id, { stage: to, lossReason: null }, `Etapa alterada: ${stageLabel(o.stage)} → ${stageLabel(to)}`)
-    toast({ tone: 'ok', title: 'Etapa atualizada', body: `${o.title}: ${stageLabel(to)}` })
+    updateOpportunity(o.id, { stage: to, lossReason: null }, `Etapa alterada: ${labelForStage(o.stage)} → ${labelForStage(to)}`)
+    toast({ tone: 'ok', title: 'Etapa atualizada', body: `${o.title}: ${labelForStage(to)}` })
   }
 
   const t = useSortPage(filtered, { title: (o) => o.title, stage: (o) => funnelStages.findIndex((s) => s.id === o.stage), value: (o) => o.estimatedValue ?? -1, next: (o) => o.nextContact ?? '9999', created: (o) => o.createdAt }, { key: 'created', dir: 'desc' }, 10)
@@ -226,7 +232,7 @@ function Funil() {
                         <button onClick={() => setDetail(o.id)} className="text-left font-semibold hover:text-brand">{o.title}</button>
                         <span className="block text-xs text-muted">{clientName(o.clientId)} · {o.source} · {ownerName(o.ownerId)}</span>
                       </td>
-                      <td className="px-4 py-3"><Badge tone={o.stage === 'fechado' ? 'ok' : o.stage === 'perdido' ? 'red' : 'neutral'}>{stageLabel(o.stage)}</Badge></td>
+                      <td className="px-4 py-3"><Badge tone={o.stage === 'fechado' ? 'ok' : o.stage === 'perdido' ? 'red' : 'neutral'}>{labelForStage(o.stage)}</Badge></td>
                       <td className="px-4 py-3 text-right font-semibold tabular">{o.estimatedValue === null ? '—' : brl(o.estimatedValue)}</td>
                       <td className="px-4 py-3 tabular">{dateBR(o.lastContact)}</td>
                       <td className="px-4 py-3 tabular">
@@ -292,7 +298,7 @@ function Funil() {
               variant="primary"
               onClick={() => {
                 const o = opportunities.find((x) => x.id === closing)!
-                updateOpportunity(o.id, { stage: 'fechado', nextContact: null, lossReason: null }, `Fechamento confirmado: ${stageLabel(o.stage)} → Fechado`)
+                updateOpportunity(o.id, { stage: 'fechado', nextContact: null, lossReason: null }, `Fechamento confirmado: ${labelForStage(o.stage)} → Fechado`)
                 toast({ tone: 'ok', title: 'Oportunidade fechada', body: o.title })
                 setClosing(null)
               }}
@@ -320,7 +326,7 @@ function Funil() {
           <p className="text-xs text-muted sm:col-span-2">O lead será criado na etapa “Novo”, vinculado ao usuário autenticado e salvo diretamente no PostgreSQL.</p>
         </div>}
       </Modal>
-      {selected && <OpportunityDrawer o={selected} onClose={() => setDetail(null)} clientName={clientName(selected.clientId)} onMove={(to) => move(selected, to)} userName={ownerName} readOnly={!canEdit} />}
+      {selected && <OpportunityDrawer o={selected} funnelStages={funnelStages} onClose={() => setDetail(null)} clientName={clientName(selected.clientId)} onMove={(to) => move(selected, to)} userName={ownerName} readOnly={!canEdit} />}
     </>
   )
 }
@@ -349,8 +355,9 @@ function AlertBox({ title, items, tone, icon, onOpen, clientName }: { title: str
   )
 }
 
-function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly = false }: { o: Opportunity; onClose: () => void; clientName: string; onMove: (to: StageId) => void; userName: (id: string) => string; readOnly?: boolean }) {
+function OpportunityDrawer({ o, funnelStages, onClose, clientName, onMove, userName, readOnly = false }: { o: Opportunity; funnelStages: { id: StageId; label: string }[]; onClose: () => void; clientName: string; onMove: (to: StageId) => void; userName: (id: string) => string; readOnly?: boolean }) {
   const { updateOpportunity, toast, quotes } = useStore()
+  const labelForStage = (id: StageId) => stageLabel(id, funnelStages)
   const quoteNumber = quotes.find((q) => q.id === o.quoteId)?.number
   const [next, setNext] = useState(o.nextContact ?? '')
   const [action, setAction] = useState(o.nextAction)
@@ -369,14 +376,14 @@ function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly 
           <h3 className="text-3xl font-extrabold uppercase leading-none">{o.title}</h3>
           <p className="mt-1 text-sm text-muted">{clientName} · {o.source} · {userName(o.ownerId)}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            <Badge tone={o.stage === 'fechado' ? 'ok' : o.stage === 'perdido' ? 'red' : 'dark'}>{stageLabel(o.stage)}</Badge>
+            <Badge tone={o.stage === 'fechado' ? 'ok' : o.stage === 'perdido' ? 'red' : 'dark'}>{labelForStage(o.stage)}</Badge>
             <Badge>{o.estimatedValue === null ? 'Valor a definir' : brl(o.estimatedValue)}</Badge>
             {quoteNumber
               ? <Link to="/orcamentos" search={{ q: quoteNumber }} className="text-xs font-semibold text-brand hover:underline">Ver orçamento {quoteNumber}</Link>
               : !readOnly && o.stage !== 'perdido' && <Link to="/orcamentos/novo" search={{ oportunidade: o.id }} className="text-xs font-semibold text-brand hover:underline">Criar orçamento vinculado</Link>}
           </div>
         </div>
-        {readOnly ? <p className="text-sm text-muted">Etapa atual: <strong>{stageLabel(o.stage)}</strong></p> : <Field label="Etapa">
+        {readOnly ? <p className="text-sm text-muted">Etapa atual: <strong>{labelForStage(o.stage)}</strong></p> : <Field label="Etapa">
           {(id) => (
             <select id={id} className={inputCls()} value={o.stage} onChange={(e) => onMove(e.target.value as StageId)}>
               {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
