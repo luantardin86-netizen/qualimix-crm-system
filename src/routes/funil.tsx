@@ -27,13 +27,14 @@ function followUp(o: Opportunity) {
 }
 
 function Funil() {
-  const { opportunities, clients, sites, updateOpportunity, createOpportunity, toast, team, currentRole, views, demoMode } = useStore()
+  const { opportunities, clients, sites, updateOpportunity, setOpportunityArchived, createOpportunity, toast, team, currentRole, views, demoMode } = useStore()
   const canEdit = currentRole === 'administrador' || currentRole === 'comercial'
   const [view, setView] = useState<'kanban' | 'tabela'>('kanban')
   const [owner, setOwner] = useState('')
   const [source, setSource] = useState('')
   const [period, setPeriod] = useState('')
   const [stage, setStage] = useState('')
+  const [archiveFilter, setArchiveFilter] = useState<'ativas' | 'arquivadas' | 'todas'>('ativas')
   const [losing, setLosing] = useState<{ id: string; reason: string; note: string } | null>(null)
   const [closing, setClosing] = useState<string | null>(null)
   const [detail, setDetail] = useState<string | null>(null)
@@ -54,14 +55,16 @@ function Funil() {
   const filtered = useMemo(
     () =>
       opportunities
+        .filter((o) => archiveFilter === 'todas' || (archiveFilter === 'arquivadas' ? o.archived === true : o.archived !== true))
         .filter((o) => (!owner || o.ownerId === owner) && (!source || o.source === source) && (!stage || o.stage === stage) && (!period || daysBetween(o.enteredAt, today) <= Number(period)))
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    [opportunities, owner, source, period, stage],
+    [opportunities, owner, source, period, stage, archiveFilter],
   )
 
-  const overdue = filtered.filter((o) => isOpen(o) && o.nextContact && daysBetween(today, o.nextContact) < 0)
-  const todayList = filtered.filter((o) => isOpen(o) && o.nextContact && daysBetween(today, o.nextContact) === 0)
-  const stale = filtered.filter((o) => isOpen(o) && (!o.lastContact || daysBetween(o.lastContact, today) >= STALE_DAYS))
+  const activeFiltered = filtered.filter((o) => !o.archived)
+  const overdue = activeFiltered.filter((o) => isOpen(o) && o.nextContact && daysBetween(today, o.nextContact) < 0)
+  const todayList = activeFiltered.filter((o) => isOpen(o) && o.nextContact && daysBetween(today, o.nextContact) === 0)
+  const stale = activeFiltered.filter((o) => isOpen(o) && (!o.lastContact || daysBetween(o.lastContact, today) >= STALE_DAYS))
 
   const submitLead = async () => {
     setLeadTried(true)
@@ -126,6 +129,11 @@ function Funil() {
       </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
+        <select aria-label="Situação das oportunidades" className={cx(inputCls(), 'w-auto')} value={archiveFilter} onChange={(e) => setArchiveFilter(e.target.value as typeof archiveFilter)}>
+          <option value="ativas">Oportunidades ativas</option>
+          <option value="arquivadas">Arquivadas</option>
+          <option value="todas">Todas</option>
+        </select>
         <select aria-label="Responsável" className={cx(inputCls(), 'w-auto')} value={owner} onChange={(e) => setOwner(e.target.value)}>
           <option value="">Responsável: todos</option>
           {team.filter((u) => u.role === 'Comercial' || u.role === 'Administrador').map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
@@ -155,7 +163,7 @@ function Funil() {
           <div className="grid auto-cols-[270px] grid-flow-col gap-3">
             {funnelStages.map((s, idx) => {
               const items = filtered.filter((o) => o.stage === s.id)
-              const databaseSummary = !demoMode && !owner && !source && !period
+              const databaseSummary = archiveFilter === 'ativas' && !demoMode && !owner && !source && !period
                 ? views.funnel.find((row) => row.etapa === s.id)
                 : undefined
               const itemCount = databaseSummary ? Number(databaseSummary.quantidade ?? 0) : items.length
@@ -186,13 +194,13 @@ function Funil() {
                             {f && <Badge tone={f.tone} className="ml-auto">{f.text}</Badge>}
                           </div>
                           <p className="mt-1 text-xs text-muted">
-                            {o.source} · {ownerName(o.ownerId).split(' ')[0]}
+                            {o.source} · {ownerName(o.ownerId).split(' ')[0]} {o.archived && '· Arquivada'}
                           </p>
                           {isOpen(o) && <p className="mt-1 text-xs"><span className="font-semibold">Próx.:</span> {o.nextAction} {o.nextContact && `(${dateBR(o.nextContact)})`}</p>}
                           {o.lossReason && <p className="mt-1 text-xs text-brand">Motivo: {o.lossReason}</p>}
-                          <select aria-label={`Mover ${o.title}`} className={cx(inputCls(), 'mt-2 h-8 text-xs')} value={o.stage} onChange={(e) => move(o, e.target.value as StageId)}>
+                          {!o.archived && <select aria-label={`Mover ${o.title}`} className={cx(inputCls(), 'mt-2 h-8 text-xs')} value={o.stage} onChange={(e) => move(o, e.target.value as StageId)}>
                             {funnelStages.map((x) => <option key={x.id} value={x.id}>{x.id === o.stage ? `Etapa: ${x.label}` : `Mover para: ${x.label}`}</option>)}
-                          </select>
+                          </select>}
                         </article>
                       )
                     })}
@@ -320,7 +328,7 @@ function Funil() {
           <p className="text-xs text-muted sm:col-span-2">O lead será criado na etapa “Novo”, vinculado ao usuário autenticado e salvo diretamente no PostgreSQL.</p>
         </div>}
       </Modal>
-      {selected && <OpportunityDrawer o={selected} onClose={() => setDetail(null)} clientName={clientName(selected.clientId)} onMove={(to) => move(selected, to)} userName={ownerName} readOnly={!canEdit} />}
+      {selected && <OpportunityDrawer o={selected} onClose={() => setDetail(null)} clientName={clientName(selected.clientId)} onMove={(to) => move(selected, to)} userName={ownerName} readOnly={!canEdit} onArchive={async (archived) => { await setOpportunityArchived(selected.id, archived); toast({ tone: 'ok', title: archived ? 'Oportunidade arquivada' : 'Oportunidade restaurada', body: selected.title }); setDetail(null) }} />}
     </>
   )
 }
@@ -349,8 +357,9 @@ function AlertBox({ title, items, tone, icon, onOpen, clientName }: { title: str
   )
 }
 
-function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly = false }: { o: Opportunity; onClose: () => void; clientName: string; onMove: (to: StageId) => void; userName: (id: string) => string; readOnly?: boolean }) {
+function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly = false, onArchive }: { o: Opportunity; onClose: () => void; clientName: string; onMove: (to: StageId) => void; userName: (id: string) => string; readOnly?: boolean; onArchive: (archived: boolean) => Promise<void> }) {
   const { updateOpportunity, toast, quotes } = useStore()
+  const canEditDetails = !readOnly && !o.archived
   const quoteNumber = quotes.find((q) => q.id === o.quoteId)?.number
   const [next, setNext] = useState(o.nextContact ?? '')
   const [action, setAction] = useState(o.nextAction)
@@ -376,14 +385,14 @@ function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly 
               : !readOnly && o.stage !== 'perdido' && <Link to="/orcamentos/novo" search={{ oportunidade: o.id }} className="text-xs font-semibold text-brand hover:underline">Criar orçamento vinculado</Link>}
           </div>
         </div>
-        {readOnly ? <p className="text-sm text-muted">Etapa atual: <strong>{stageLabel(o.stage)}</strong></p> : <Field label="Etapa">
+        {!canEditDetails ? <p className="text-sm text-muted">Etapa atual: <strong>{stageLabel(o.stage)}</strong>{o.archived ? ' · Oportunidade arquivada' : ''}</p> : <Field label="Etapa">
           {(id) => (
             <select id={id} className={inputCls()} value={o.stage} onChange={(e) => onMove(e.target.value as StageId)}>
               {funnelStages.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
             </select>
           )}
         </Field>}
-        {!readOnly && <div className="rounded-md border border-line p-4">
+        {canEditDetails && <div className="rounded-md border border-line p-4">
           <h4 className="mb-3 text-lg font-bold uppercase">Registrar contato e próximo passo</h4>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Próxima ação" error={contactTried ? contactErrors.action : undefined} hint="Descreva o que precisa acontecer. Ex.: ligar para confirmar as medidas.">{(id) => <input id={id} maxLength={300} className={inputCls(contactTried && !!contactErrors.action)} value={action} placeholder="Ex.: Ligar para confirmar as medidas" onChange={(e) => setAction(e.target.value)} />}</Field>
@@ -405,6 +414,11 @@ function OpportunityDrawer({ o, onClose, clientName, onMove, userName, readOnly 
             }}
           >
             Registrar contato
+          </Button>
+        </div>}
+        {!readOnly && <div className="flex justify-end">
+          <Button variant={o.archived ? 'primary' : 'danger'} onClick={() => void onArchive(!o.archived).catch((error) => toast({ tone: 'erro', title: 'Não foi possível alterar o arquivo', body: error instanceof Error ? error.message : 'Tente novamente.' }))}>
+            {o.archived ? 'Restaurar oportunidade' : 'Arquivar oportunidade'}
           </Button>
         </div>}
         <section>
