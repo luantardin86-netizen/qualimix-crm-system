@@ -4,7 +4,7 @@ import { Check, Pencil, X } from 'lucide-react'
 import { createUser, getAuthSession, listUsers, setUserActive, updateUserProfile } from '../lib/auth.functions'
 
 type UserRole = 'comercial' | 'operacao' | 'financeiro' | 'consulta'
-type UserRow = { id: string; nome: string; username: string; perfil: 'admin' | 'user'; role: UserRole | 'administrador'; ativo: boolean; created_at: string }
+type UserRow = { id: string; nome: string; username: string; perfil: 'admin' | 'user'; role: UserRole | 'admin' | 'administrador'; ativo: boolean; created_at: string }
 
 export const Route = createFileRoute('/usuarios')({
   beforeLoad: async () => {
