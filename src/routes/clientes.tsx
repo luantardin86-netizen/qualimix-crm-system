@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { Building2, FileText, MapPin, MessageCircle, Phone, Plus, Search, Users } from 'lucide-react'
 import { useStore } from '../data/store'
-import { clientTypes, leadSources, regions } from '../data/settings'
 import { today, userName, type Client, type Site } from '../data/fixtures'
 import { formatDocument, formatPhone, onlyDigits, whatsappUrl } from '../lib/documents'
 import { normalizeBrazilPhone, validateClientFields } from '../lib/crm-validation'
@@ -24,7 +23,8 @@ export const Route = createFileRoute('/clientes')({
 function Clientes() {
   const { id, novo } = Route.useSearch()
   const navigate = useNavigate()
-  const { clients, sites, quotes, currentRole, views } = useStore()
+  const { clients, sites, quotes, currentRole, views, settings } = useStore()
+  const { clientTypes, leadSources, regions } = settings
   const canCreate = currentRole === 'admin' || currentRole === 'administrador'
   const clientSummaryById = useMemo(() => new Map(views.clients.map((row) => [String(row.id), row])), [views.clients])
   const totalSitesForClient = (clientId: string) => {
@@ -171,7 +171,8 @@ const emptyForm = {
 }
 
 function ClientForm({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const { clients, addClient, toast, team, currentUserId } = useStore()
+  const { clients, addClient, toast, team, currentUserId, settings } = useStore()
+  const { clientTypes, leadSources, regions } = settings
   const [f, setF] = useState(emptyForm)
   const [errors, setErrors] = useState<Record<string, string>>({})
   const [tried, setTried] = useState(false)
@@ -186,7 +187,7 @@ function ClientForm({ open, onClose, onCreated }: { open: boolean; onClose: () =
   const validate = () => validateClientFields({
     ...f,
     whatsapp: f.sameWa ? f.phone : f.whatsapp,
-  }, clients)
+  }, clients, { clientTypes, leadSources, regions })
   const liveErrors = tried ? validate() : errors
 
   const close = () => {
