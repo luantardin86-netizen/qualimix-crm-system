@@ -1,7 +1,5 @@
 import { createServerFn } from '@tanstack/react-start'
 import type { Client, Opportunity, QuoteRecord, Site, TeamUser, QuoteType } from '../data/fixtures'
-import { quoteContext } from '../data/derived'
-import { createDefaultSettings, normalizeSettings } from '../data/settings'
 import {
   computeQuote,
   defaultExtras,
@@ -10,6 +8,8 @@ import {
   type MeasureElement,
   type QuoteExtras,
   type QuoteLine,
+  type QuoteContext,
+  type CommercialRules,
 } from './quote'
 import { assertSameOrigin, requireCurrentProfile, type AuthProfile } from './auth.server'
 import { getPool, withTransaction } from './db.server'
@@ -723,15 +723,19 @@ export const persistQuote = createServerFn({ method: 'POST' })
       throw new Error(`A forma de pagamento ${method?.label ?? rejectedPaymentMethod} não está aceita nas configurações comerciais.`)
     }
 
-    const persistedSettings = normalizeSettings({
-      ...createDefaultSettings(),
+    const rawRules = parseConfigJson(config.regras_oficiais)
+    if (!rawRules || typeof rawRules !== 'object' || Array.isArray(rawRules)) {
+      throw new Error('As regras comerciais oficiais não estão configuradas corretamente no banco.')
+    }
+    const rules = rawRules as CommercialRules
+    const ctx: QuoteContext = {
       catalog: dbCatalog,
-      officialRules: parseConfigJson(config.regras_oficiais),
-      paymentMethods,
-    })
+      rules,
+      demoPrices: false,
+      enabledPaymentMethodIds,
+    }
     const volume = summarizeMeasures(data.volumeElements, data.volumeMargin, 'volume')
     const area = summarizeMeasures(data.areaElements, data.areaMargin, 'area')
-    const ctx = quoteContext(false, persistedSettings)
     const result = computeQuote({
       clientId: data.clientId, siteId: data.siteId, lines, volume, area,
       extras: data.extras, paymentMethodIds: data.paymentMethodIds,
