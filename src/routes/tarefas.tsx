@@ -192,7 +192,7 @@ function Tarefas() {
               {(id) => (
                 <select id={id} className={inputCls()} value={form.opportunityId} onChange={(event) => setForm((current) => ({ ...current, opportunityId: event.target.value }))}>
                   <option value="">Tarefa geral, sem oportunidade</option>
-                  {opportunities.map((opportunity) => {
+                  {opportunities.filter((opportunity) => !opportunity.archived).map((opportunity) => {
                     const client = clients.find((item) => item.id === opportunity.clientId)
                     return <option key={opportunity.id} value={opportunity.id}>{opportunity.title}{client ? ' · ' + client.name : ''}</option>
                   })}
