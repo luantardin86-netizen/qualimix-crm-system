@@ -26,7 +26,7 @@ const validClient = {
 
 describe('CRM field validation', () => {
   it('accepts valid client fields and normalizes a Brazilian phone with country code', () => {
-    expect(validateClientFields(validClient)).toEqual({})
+    expect(validateClientFields(validClient, [], { clientTypes: ['Construtora'], regions: ['Região Norte'], leadSources: ['Indicação'] })).toEqual({})
     expect(normalizeBrazilPhone('+55 (61) 99999-9999')).toBe('61999999999')
     expect(phoneValidationError('+55 (61) 99999-9999', true)).toBeNull()
   })
@@ -40,7 +40,7 @@ describe('CRM field validation', () => {
       type: 'Categoria inventada',
       region: 'Região inexistente',
       source: 'Origem inventada',
-    })
+    }, [], { clientTypes: ['Construtora'], regions: ['Região Norte'], leadSources: ['Indicação'] })
     expect(errors.document).toMatch(/CPF inválido/)
     expect(errors.phone).toBeTruthy()
     expect(errors.email).toBeTruthy()
@@ -68,7 +68,7 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'WhatsApp 1',
       estimatedValue: '25.000,50',
-    })).toEqual({})
+    }, { leadSources: ['WhatsApp 1'] })).toEqual({})
 
     expect(validateLeadFields({
       title: 'A',
@@ -76,7 +76,7 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'desconhecido',
       estimatedValue: '-10',
-    })).toEqual({
+    }, { leadSources: ['WhatsApp 1'] })).toEqual({
       title: 'Informe um título entre 3 e 180 caracteres.',
       clientId: 'Selecione um cliente ativo.',
       source: 'Selecione a origem do contato.',
@@ -91,8 +91,39 @@ describe('CRM field validation', () => {
       siteId: '',
       source: 'Indicação',
       estimatedValue: '25.1234',
-    })
+    }, { leadSources: ['Indicação'] })
     expect(errors.estimatedValue).toMatch(/duas casas decimais/)
+  })
+
+  it('validates client and lead selections against caller-supplied database lists', () => {
+    expect(validateClientFields(validClient, [], {
+      clientTypes: ['Construtora', 'Incorporadora'],
+      regions: ['Centro Expandido'],
+      leadSources: ['Site institucional'],
+    })).toMatchObject({
+      type: 'Selecione um tipo de cliente válido.',
+      region: 'Selecione uma região de atendimento válida.',
+      source: 'Selecione uma origem válida.',
+    })
+
+    expect(validateClientFields({
+      ...validClient,
+      type: 'Incorporadora',
+      region: 'Centro Expandido',
+      source: 'Site institucional',
+    }, [], {
+      clientTypes: ['Construtora', 'Incorporadora'],
+      regions: ['Centro Expandido'],
+      leadSources: ['Site institucional'],
+    })).toEqual({})
+
+    expect(validateLeadFields({
+      title: 'Lead antigo',
+      clientId: 'client-1',
+      siteId: '',
+      source: 'Origem removida',
+      estimatedValue: '',
+    }, { leadSources: ['Origem nova'] }).source).toBeTruthy()
   })
 
   it('validates decimal measurement bounds and real ISO dates', () => {
