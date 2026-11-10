@@ -269,3 +269,8 @@ export function useStore() {
   if (!store) throw new Error('useStore fora do StoreProvider')
   return store
 }
+
+/** Acesso opcional para componentes reutilizáveis que também são renderizados isoladamente em testes. */
+export function useOptionalStore() {
+  return useContext(StoreCtx)
+}

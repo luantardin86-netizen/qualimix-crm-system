@@ -2,13 +2,16 @@ import { useState, type FormEvent } from 'react'
 import { createFileRoute } from '@tanstack/react-router'
 import { LockKeyhole, LogIn } from 'lucide-react'
 import { login } from '../lib/auth.functions'
+import { getPublicBranding } from '../lib/settings.functions'
 
 export const Route = createFileRoute('/login')({
+  loader: () => getPublicBranding(),
   head: () => ({ meta: [{ title: 'Entrar — Qualimix CRM' }] }),
   component: LoginPage,
 })
 
 function LoginPage() {
+  const branding = Route.useLoaderData()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -33,7 +36,7 @@ function LoginPage() {
       <form onSubmit={submit} className="w-full max-w-md rounded-xl border border-line bg-surface p-8 shadow-xl">
         <div className="mb-8">
           <div className="mb-4 grid h-12 w-12 place-items-center rounded-lg bg-ink text-white"><LockKeyhole className="h-6 w-6" /></div>
-          <p className="text-xs font-bold uppercase tracking-[.2em] text-brand">Qualimix</p>
+          {branding.logoUrl ? <img src={branding.logoUrl} alt={branding.tradeName || 'Logo institucional'} className="mb-3 max-h-12 max-w-40 object-contain" /> : branding.tradeName ? <p className="text-xs font-bold uppercase tracking-[.2em] text-brand">{branding.tradeName}</p> : null}
           <h1 className="mt-1 font-display text-4xl font-extrabold uppercase">Acessar o CRM</h1>
           <p className="mt-2 text-sm text-muted">Entre com seu nome de usuário e senha.</p>
         </div>
