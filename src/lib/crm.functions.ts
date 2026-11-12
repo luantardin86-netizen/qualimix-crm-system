@@ -32,7 +32,7 @@ const mapClient = (r: any): Client => ({
   id: String(r.id), name: r.nome, tradeName: r.nome_fantasia ?? '', document: r.documento ?? '',
   phone: r.telefone ?? '', whatsapp: r.whatsapp ?? '', email: r.email ?? '', address: r.endereco ?? '',
   city: r.cidade ?? '', region: r.regiao ?? '', type: r.tipo ?? 'Outro', source: r.origem ?? 'Outros',
-  ownerId: r.responsavel_id ?? '', notes: r.observacoes ?? '', createdAt: isoDate(r.created_at),
+  ownerId: r.responsavel_id ?? '', notes: r.observacoes ?? '', createdAt: isoDateTime(r.created_at),
   active: Boolean(r.ativo), demo: Boolean(r.is_demo),
 })
 const mapSite = (r: any): Site => ({
@@ -47,7 +47,22 @@ const mapOpportunity = (r: any): Opportunity => ({
   ownerId: r.responsavel_id ?? '', source: r.origem, enteredAt: isoDate(r.entrou_em),
   lastContact: nullableDate(r.ultimo_contato), nextContact: nullableDate(r.proximo_contato),
   nextAction: r.proxima_acao ?? '', lossReason: r.motivo_perda ?? null,
-  quoteId: null, history: Array.isArray(r.historico) ? r.historico : [], archived: Boolean(r.arquivada), demo: Boolean(r.is_demo),
+  quoteId: null,
+  // Registros antigos podem conter eventos sem "at". Normaliza o histórico
+  // na fronteira do banco para que a interface nunca dependa de campos ausentes.
+  history: Array.isArray(r.historico)
+    ? r.historico
+        .filter((event: any) => event && typeof event === 'object' && !Array.isArray(event))
+        .map((event: any) => ({
+          ...event,
+          at: typeof event.at === 'string' && event.at.trim()
+            ? event.at
+            : isoDateTime(r.updated_at ?? r.created_at),
+          by: typeof event.by === 'string' ? event.by : '',
+          text: typeof event.text === 'string' ? event.text : 'Atividade registrada',
+        }))
+    : [],
+  archived: Boolean(r.arquivada), demo: Boolean(r.is_demo),
 })
 const mapQuote = (r: any): QuoteRecord => {
   const d = r.dados_orcamento ?? {}
